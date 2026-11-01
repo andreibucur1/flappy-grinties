@@ -1,0 +1,535 @@
+// Ecrane, input și desenarea întregii scene pe canvas, în stil 8-bit.
+// Canvasul are rezoluția „de artă" (800x600 logic / pixelSize = 200x150); CSS îl mărește fără netezire.
+// Toate coordonatele de aici sunt în pixeli de artă. Logica de stări stă în main.js; aici se transmit evenimente prin `handlers`.
+const UI = (function () {
+  'use strict';
+
+  const C = CONFIG;
+  const PS = C.pixelSize;
+  const W = C.canvas.width / PS;                 // 200
+  const H = C.canvas.height / PS;                // 150
+  const GROUND_Y = C.canvas.height - C.groundHeight; // px logici
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const stage = document.getElementById('stage');
+  const facesCanvas = document.getElementById('faces'); // strat transparent 800x600 pentru pozele personajelor
+  const fctx = facesCanvas.getContext('2d');
+  const photos = {};                                    // id personaj -> imagine (ok = încărcată)
+  const input = document.getElementById('name-input'); // invizibil: primește tastarea (diacritice, tastatură românească); textul se desenează pe canvas
+
+  let handlers = null;
+  let debug = false;               // Ctrl+Shift+H; nu se salvează nicăieri
+  let nameError = '';
+  let resultsScroll = 0;
+  const mouse = { x: -1, y: -1 };          // poziția mouse-ului, în pixeli de artă
+  let dragScroll = false;                  // se trage de bara de derulare
+  let resultsLayout = null;                // { trackY, trackH, visible, maxScroll }, calculat la desenare
+  const BTN_RESULTS = { x: 132, y: 135, w: 66, h: 13 };   // ecranul de start
+  const BTN_BACK = { x: 150, y: 5, w: 42, h: 16 };        // ecranul de rezultate (mai înalt: „Î" are accent deasupra)
+  const data = { top: [], over: null, readyName: '', readyMap: '', results: [] };
+
+  // ---------------------------------------------------------------- unelte
+  function box(x, y, w, h, color) {
+    ctx.fillStyle = PALETTE[color];
+    ctx.fillRect(x, y, w, h);
+  }
+
+  // Degrade cu dither ordonat (aceeași matrice Bayer ca la tranzițiile de fundal), doar cu culori din paletă
+  function gradPick(colors, t, x, y) {
+    const f = Math.max(0, Math.min(1, t)) * (colors.length - 1);
+    const i = Math.min(colors.length - 2, Math.floor(f));
+    return (f - i) * 16 > BAYER[y & 3][x & 3] ? colors[i + 1] : colors[i];
+  }
+
+  // Panourile și butoanele se desenează o singură dată per mărime (și stare), apoi doar se copiază.
+  const uiCache = {};
+
+  function cached(key, w, h, paint) {
+    if (!uiCache[key]) {
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const x = c.getContext('2d');
+      paint(function (px, py, pw, ph, col) { x.fillStyle = PALETTE[col]; x.fillRect(px, py, pw, ph); });
+      uiCache[key] = c;
+    }
+    return uiCache[key];
+  }
+
+  // Panou: ramă de lemn (lumină sus-stânga, umbră jos-dreapta, colțuri rotunjite, ținte aurii),
+  // interior albastru în degrade și umbră în dither în dreapta-jos. Conținutul începe la 4 pixeli de margine.
+  function panel(x, y, w, h) {
+    ctx.drawImage(cached('p' + w + 'x' + h, w + 2, h + 2, function (b) {
+      for (let j = 2; j < h + 2; j++) for (let i = 2; i < w + 2; i++) if ((i >= w || j >= h) && ((i + j) & 1)) b(i, j, 1, 1, 'black');
+      b(1, 0, w - 2, h, 'dirtDark'); b(0, 1, w, h - 2, 'dirtDark');
+      b(1, 1, w - 2, h - 2, 'dirt');
+      b(1, 1, w - 2, 1, 'horseLit'); b(1, 1, 1, h - 2, 'horseLit');
+      b(2, h - 2, w - 3, 1, 'trunk'); b(w - 2, 2, 1, h - 3, 'trunk');
+      b(3, 3, w - 6, h - 6, 'dirtDark');
+      for (let j = 4; j < h - 4; j++) for (let i = 4; i < w - 4; i++) b(i, j, 1, 1, gradPick(['mtnNight', 'nightB'], (j - 4) / Math.max(1, h - 9), i, j));
+      [[1, 1], [w - 3, 1], [1, h - 3], [w - 3, h - 3]].forEach(function (p) { b(p[0], p[1], 2, 2, 'goldShade'); b(p[0], p[1], 1, 1, 'goldLit'); });
+    }), x, y);
+  }
+
+  // outline / shadow: true = negru, sau numele unei culori din paletă
+  function text(s, x, y, color, scale, align, shadow, outline) {
+    Font.draw(ctx, s, x, y, { color: color || 'creamLit', scale: scale || 1, align: align || 'left', shadow: shadow, outline: outline });
+  }
+
+  function blink(period) {
+    return Math.floor(performance.now() / period) % 2 === 0;
+  }
+
+  // ---------------------------------------------------------------- scalare
+  // Factor întreg când se poate, ca pixelii să fie la fel de mari peste tot
+  function resize() {
+    const fit = Math.min(window.innerWidth / W, window.innerHeight / H);
+    const s = fit >= 1 ? Math.floor(fit) : fit;
+    const w = Math.round(W * s) + 'px', h = Math.round(H * s) + 'px';
+    canvas.style.width = w; canvas.style.height = h;
+    stage.style.width = w; stage.style.height = h;
+  }
+
+  function loadPhotos() {
+    C.characters.forEach(function (ch) {
+      const img = new Image();
+      img.ok = false;
+      img.onload = function () { img.ok = true; };
+      img.src = ch.photo;
+      photos[ch.id] = img;
+    });
+  }
+
+  // ---------------------------------------------------------------- scena
+  // Rezervă: placeholderul pixel art, doar dacă poza personajului nu s-a încărcat
+  function drawBirdSprite(b, ch) {
+    const sp = SPRITES.get(ch.sprite + (b.vy < 0 ? '_up' : '_down'));
+    ctx.drawImage(sp.c, Math.round(b.x / PS - sp.w / 2), Math.round(b.y / PS - sp.h / 2));
+  }
+
+  // Personajul = poza membrului, pe stratul transparent, ușor înclinată după viteza verticală
+  function drawFaces(game, state, debugOn) {
+    fctx.clearRect(0, 0, C.canvas.width, C.canvas.height);
+    if (state !== 'READY' && state !== 'PLAYING') return;
+    const ch = game.character;
+    if (!ch) return;
+    const b = game.bird;
+    const img = photos[ch.id];
+    if (img && img.ok) {
+      const s = C.bird.size;
+      const r = Math.min(s / img.naturalWidth, s / img.naturalHeight);
+      const w = img.naturalWidth * r, h = img.naturalHeight * r;
+      const tilt = Math.max(-0.3, Math.min(0.6, b.vy / 900 * 1.0));
+      fctx.save();
+      fctx.translate(b.x, b.y);
+      fctx.rotate(tilt);
+      fctx.drawImage(img, -w / 2, -h / 2, w, h);
+      fctx.restore();
+    }
+    if (debugOn) {
+      const h = C.bird.size * C.bird.hitboxScale / 2;
+      fctx.strokeStyle = PALETTE.red;
+      fctx.lineWidth = PS;
+      fctx.strokeRect(b.x - h, b.y - h, 2 * h, 2 * h);
+    }
+  }
+
+  function photoReady(ch) {
+    const img = photos[ch.id];
+    return !!(img && img.ok);
+  }
+
+  // Tranziția dintre fundaluri: dither ordonat (matrice Bayer 4x4). Fundalul nou apare pixel cu pixel peste cel vechi,
+  // deci pe ecran rămân doar culori din paletă (un crossfade ar amesteca culorile).
+  const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+  const ditherMasks = [];
+  let tmpCanvas = null;
+
+  function ditherMask(level) { // pixeli opaci acolo unde valoarea Bayer < level (1..15)
+    if (!ditherMasks[level]) {
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      const x = c.getContext('2d');
+      x.fillStyle = PALETTE.white;
+      for (let y = 0; y < H; y++) for (let px = 0; px < W; px++) if (BAYER[y & 3][px & 3] < level) x.fillRect(px, y, 1, 1);
+      ditherMasks[level] = c;
+    }
+    return ditherMasks[level];
+  }
+
+  function drawBackdrop(game, layer) { // layer: 'far' (cer, dealuri) sau 'ground' (sol)
+    const paint = function (cx, key) { // fiecare strat își calculează singur deplasarea (parallax) din scrollX
+      if (layer === 'far') Backgrounds.drawFar(cx, key, game.scrollX);
+      else Backgrounds.drawGround(cx, key, game.scrollX);
+    };
+    const cur = game.currentMap().bg;
+    if (game.bgPrev === null) { paint(ctx, cur); return; }
+    paint(ctx, C.maps[game.bgPrev].bg);
+    const level = Math.min(16, Math.floor(game.bgFade / C.bgTransitionMs * 17));
+    if (level <= 0) return;
+    if (level >= 16) { paint(ctx, cur); return; }
+    if (!tmpCanvas) { tmpCanvas = document.createElement('canvas'); tmpCanvas.width = W; tmpCanvas.height = H; }
+    const tx = tmpCanvas.getContext('2d');
+    tx.globalCompositeOperation = 'source-over';
+    tx.clearRect(0, 0, W, H);
+    paint(tx, cur);
+    tx.globalCompositeOperation = 'destination-in';
+    tx.drawImage(ditherMask(level), 0, 0);
+    ctx.drawImage(tmpCanvas, 0, 0);
+  }
+
+  function drawWorld(game, state) {
+    drawBackdrop(game, 'far');
+    const showObstacles = state === 'PLAYING' || state === 'GAME_OVER' || state === 'READY';
+    if (showObstacles) {
+      for (let i = 0; i < game.pillars.length; i++) {
+        const p = game.pillars[i];
+        Obstacles.draw(ctx, p.theme, Math.round(p.x / PS), p.gapTop, p.gap, GROUND_Y);
+      }
+    }
+    drawBackdrop(game, 'ground');
+    if (showObstacles && state !== 'GAME_OVER' && game.character && !photoReady(game.character)) drawBirdSprite(game.bird, game.character);
+  }
+
+  // Overlay Ctrl+Shift+H: conturul de 1 pixel de artă al reuniunii hitbox-urilor + linia plafonului
+  let maskCanvas = null;
+
+  function drawDebug(game, state) {
+    const showObstacles = state === 'PLAYING' || state === 'GAME_OVER' || state === 'READY';
+    if (showObstacles) {
+      if (!maskCanvas) { maskCanvas = document.createElement('canvas'); maskCanvas.width = W; maskCanvas.height = H; }
+      const mx = maskCanvas.getContext('2d', { willReadFrequently: true });
+      mx.clearRect(0, 0, W, H);
+      mx.fillStyle = PALETTE.white;
+      game.pillars.forEach(function (p) {
+        p.rects.forEach(function (r) {
+          const x0 = Math.round((p.x + r[0]) / PS), x1 = Math.round((p.x + r[1]) / PS);
+          mx.fillRect(x0, Math.round(r[2] / PS), x1 - x0, Math.round(r[3] / PS) - Math.round(r[2] / PS));
+        });
+      });
+      const a = mx.getImageData(0, 0, W, H).data;
+      const on = function (x, y) { return x >= 0 && x < W && y >= 0 && y < H && a[(y * W + x) * 4 + 3] > 0; };
+      ctx.fillStyle = PALETTE.red;
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          if (on(x, y) && !(on(x - 1, y) && on(x + 1, y) && on(x, y - 1) && on(x, y + 1))) ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+    box(0, Math.round(C.ceilingY / PS), W, 1, 'red');
+  }
+
+  // ---------------------------------------------------------------- clasament
+  const RANK_COLORS = ['goldLit', 'stoneLit', 'horseLit']; // aur, argint, bronz
+
+  function drawBoard(rows, x, y, w, pitch, scale, highlightKey) {
+    if (!rows.length) {
+      text('Niciun scor încă. Fii primul!', x + w / 2, y + Math.round((pitch - 7) / 2), 'creamLit', 1, 'center');
+      return;
+    }
+    rows.forEach(function (p, i) {
+      const ry = y + i * pitch;
+      const score = String(p.best);
+      if (p.key === highlightKey) box(x - 2, ry - 2, w + 4, 7 * scale + 4, 'mtnNightLit');
+      text(String(i + 1), x, ry, RANK_COLORS[i] || 'creamLit', scale);
+      text(score, x + w, ry, 'goldLit', scale, 'right');
+      const nameX = x + 8 * scale;
+      const avail = w - 8 * scale - Font.measure(score, scale) - 4 * scale;
+      const s2 = Font.fit(p.displayName, avail, scale);
+      const nm = Font.clip(p.displayName, avail, s2);
+      text(nm, nameX, ry + Math.round((7 * scale - 7 * s2) / 2), 'creamLit', s2);
+    });
+  }
+
+  // ---------------------------------------------------------------- ecrane
+  function inside(b, p) { return p.x >= b.x && p.x < b.x + b.w && p.y >= b.y && p.y < b.y + b.h; }
+
+  // Interiorul butonului (fără cele 2 rânduri de contur) are h - 4 rânduri. Textul (7 rânduri) se centrează vertical în el;
+  // dy = decalajul rândului 0 al textului față de partea de sus a butonului (implicit: centrat).
+  // Buton: scândură de lemn cu muchie luminată sus și umbră jos; la trecerea mouse-ului se luminează
+  function button(b, label, dy) {
+    const hover = inside(b, mouse);
+    const w = b.w, h = b.h;
+    ctx.drawImage(cached('b' + w + 'x' + h + (hover ? 'h' : ''), w, h, function (f) {
+      f(1, 0, w - 2, h, 'dirtDark'); f(0, 1, w, h - 2, 'dirtDark');
+      for (let j = 1; j < h - 1; j++) for (let i = 1; i < w - 1; i++) {
+        f(i, j, 1, 1, gradPick(hover ? ['horseLit', 'horse'] : ['horse', 'horseShade'], (j - 1) / Math.max(1, h - 3), i, j));
+      }
+      f(1, 1, w - 2, 1, hover ? 'goldLit' : 'horseLit');
+      f(1, h - 2, w - 2, 1, 'horseShade');
+    }), b.x, b.y);
+    text(label, b.x + b.w / 2, b.y + (dy === undefined ? Math.floor((b.h - 7) / 2) : dy), hover ? 'creamLit' : 'goldLit', 1, 'center', 'dirtDark');
+  }
+
+  function drawAttract() {
+    const title = C.title;
+    const ts = Font.fit(title, W - 10, 2);
+    text(title, W / 2, 9, 'goldLit', ts, 'center', 'dirtDark', 'dirtDark');
+    panel(10, 31, 180, 87);
+    text('Top 3', W / 2, 37, 'creamLit', 2, 'center');
+    // pitch 18 la scara 2: coada literelor g j p q y coboară 4 pixeli de artă sub linie și nu trebuie să atingă rândul următor
+    drawBoard(data.top, 22, 57, 156, 18, 2, null);
+    if (blink(600)) text('Apasă Space ca să joci', W / 2, 122, 'creamLit', 1, 'center', false, 'nightA');
+    if (Store.warnings().length) text('! Vezi Rezultate', 4, 139, 'capLit', 1, 'left', false, 'nightA');
+    button(BTN_RESULTS, 'Rezultate');
+  }
+
+  function drawNameEntry() {
+    panel(8, 24, 184, 100);
+    text('Cum te cheamă?', W / 2, 32, 'creamLit', 2, 'center');
+    // Câmp de pergament, înalt cât să încapă accentele (deasupra) și cozile literelor g j p q y (dedesubt) la scara 2
+    box(23, 50, 154, 30, 'horseMane');
+    box(24, 51, 152, 28, 'creamLit');
+    box(24, 51, 152, 1, 'creamShade'); box(24, 51, 1, 28, 'creamShade');   // umbră interioară
+    box(25, 77, 151, 1, 'cream');
+    const v = input.value;
+    if (v) text(v, 28, 58, 'horseMane', 2);
+    else text('username', 28, 58, 'creamShade', 2);
+    if (blink(500)) box(28 + (v ? Font.measure(v, 2) + 2 : 0), 58, 2, 14, 'horseMane');
+    if (nameError) text(nameError, W / 2, 86, 'capLit', 1, 'center');
+    text('Scrie numele și apasă Enter', W / 2, 106, 'stoneLit', 1, 'center');
+  }
+
+  function drawReady(info) {
+    // Numele are accente deasupra (3 rânduri) și cozi dedesubt (2 rânduri, x scara): harta se scrie sub ele, nu peste
+    panel(30, 6, 140, 46);
+    const s = Font.fit(info.playerName, 128, 2);
+    text(info.playerName, W / 2, 16 + (s === 2 ? 0 : 3), 'goldLit', s, 'center', 'dirtDark');
+    text('Harta: ' + data.readyMap, W / 2, 38, 'creamLit', 1, 'center');
+    if (blink(600)) text('Space ca să începi', W / 2, 116, 'creamLit', 1, 'center', false, 'nightA');
+  }
+
+  function drawPlaying(game, info) {
+    text(String(game.score), W / 2, 8, 'creamLit', 4, 'center', 'nightA', 'nightA');
+    text(game.currentMap().name, 3, 3, 'creamLit', 1, 'left', false, 'nightA');
+    text(info.playerName, W - 3, 3, 'creamLit', 1, 'right', false, 'nightA');
+    if (game.banner) { // fără fundal, ca să nu acopere obstacolele
+      text(game.banner.text, W / 2, 59, 'goldLit', Font.fit(game.banner.text, W - 8, 2), 'center', false, 'dirtDark');
+    }
+  }
+
+  function drawGameOver() {
+    const r = data.over;
+    if (!r) return;
+    panel(6, 1, 188, 147);
+    text('Game over', W / 2, 8, 'capLit', 2, 'center', 'capDeep');
+    text('Scor ' + r.score, W / 2, 26, 'goldLit', 2, 'center', 'dirtDark');
+    if (r.res.isRecord && blink(400)) text('Record nou!', W / 2, 44, 'grassLit', 1, 'center');
+    text('Hartă atinsă: ' + r.mapName, W / 2, 55, 'creamLit', 1, 'center');
+    const best = Font.clip('Recordul tău (' + r.res.displayName + '): ' + r.res.best, 172, 1);
+    text(best, W / 2, 66, 'creamLit', 1, 'center');
+    text('Locul ' + r.res.rank + ' din ' + r.res.total, W / 2, 77, 'creamLit', 1, 'center');
+    text('Top 3', W / 2, 90, 'stoneLit', 1, 'center');
+    drawBoard(data.top, 20, 101, 160, 11, 1, r.res.key);
+    text('Space pentru ecranul de start', W / 2, 135, 'stoneLit', 1, 'center');
+  }
+
+  function wrapped(messages) {
+    const lines = [];
+    messages.forEach(function (m) { Font.wrap(m, 31).forEach(function (l) { lines.push(l); }); });
+    return lines;
+  }
+
+  // Ecranul de rezultate e un panou mare peste peisaj; conținutul stă în interiorul ramei (x 4..194, y 4..144)
+  const RES_BAR_X = 186;
+
+  function drawResults() {
+    panel(0, 0, 198, 148);
+    text('Rezultate', W / 2 - 10, 6, 'goldLit', 2, 'center', 'dirtDark');
+    const warn = wrapped(Store.warnings());
+    let y = 25;
+    warn.forEach(function (l) { text(l, 8, y, 'capLit', 1); y += 9; });
+    text('#', 8, y, 'stoneLit', 1);
+    text('Jucător', 22, y, 'stoneLit', 1);
+    text('Rec', 124, y, 'stoneLit', 1, 'right');
+    text('Hartă', 128, y, 'stoneLit', 1);
+    text('Ture', 182, y, 'stoneLit', 1, 'right');
+    y += 10;
+    box(6, y - 2, 184, 1, 'goldShade');
+    const PITCH = 11; // 11 și nu 10: virgula de la Ș/Ț coboară 2 rânduri sub linie și nu trebuie să atingă rândul următor
+    const visible = Math.max(1, Math.floor((126 - y) / PITCH));
+    const maxScroll = Math.max(0, data.results.length - visible);
+    resultsScroll = Math.max(0, Math.min(maxScroll, resultsScroll));
+    resultsLayout = { trackY: y - 1, trackH: visible * PITCH, visible: visible, maxScroll: maxScroll };
+    if (maxScroll > 0) { // bară de derulare: se poate trage cu mouse-ul sau se dă click pe ea
+      const th = Math.max(8, Math.floor(resultsLayout.trackH * visible / data.results.length));
+      const ty = resultsLayout.trackY + Math.round((resultsLayout.trackH - th) * resultsScroll / maxScroll);
+      box(RES_BAR_X, resultsLayout.trackY, 4, resultsLayout.trackH, 'nightA');
+      box(RES_BAR_X, ty, 4, th, 'gold');
+      box(RES_BAR_X, ty, 1, th, 'goldLit');
+    }
+    for (let i = 0; i < visible; i++) {
+      const row = data.results[resultsScroll + i];
+      if (!row) break;
+      const ry = y + i * PITCH;
+      text(String(row.rank), 8, ry, RANK_COLORS[row.rank - 1] || 'creamLit', 1);
+      text(Font.clip(row.name, 82, 1), 22, ry, 'creamLit', 1);
+      text(String(row.best), 124, ry, 'goldLit', 1, 'right');
+      text(row.short, 128, ry, 'creamLit', 1);
+      text(String(row.attempts), 182, ry, 'creamLit', 1, 'right');
+    }
+    const range = data.results.length ? (resultsScroll + 1) + '-' + Math.min(data.results.length, resultsScroll + visible) : '0';
+    text(data.results.length + ' jucători, ' + Store.totalRounds() + ' ture (' + range + ')', 8, 127, 'creamLit', 1);
+    text('Ctrl+Shift: E=CSV  J=JSON', 8, 136, 'stoneLit', 1);
+    button(BTN_BACK, 'Înapoi', 6);
+  }
+
+  // state: starea curentă din main.js; info: { playerName }
+  function draw(game, state, info) {
+    ctx.imageSmoothingEnabled = false; // se pierde dacă cineva redimensionează canvas-ul; fără ea textul mărit iese neclar
+    drawFaces(game, state, debug);
+    drawWorld(game, state);
+    if (state === 'RESULTS') { drawResults(); return; }
+    switch (state) {
+      case 'ATTRACT': drawAttract(); break;
+      case 'NAME_ENTRY': drawNameEntry(); break;
+      case 'READY': drawReady(info); break;
+      case 'PLAYING': drawPlaying(game, info); break;
+      case 'GAME_OVER': drawGameOver(); break;
+    }
+    if (debug) drawDebug(game, state);
+  }
+
+  // ---------------------------------------------------------------- date pentru ecrane (apelate din main.js la schimbarea stării)
+  function renderAttract() { data.top = Store.getTop(3); }
+
+  function renderReady(playerName, mapName) { data.readyName = playerName; data.readyMap = mapName; }
+
+  function renderGameOver(res, score, mapName) {
+    data.over = { res: res, score: score, mapName: mapName };
+    data.top = Store.getTop(3);
+  }
+
+  function renderResults() {
+    resultsScroll = 0;
+    data.results = Store.getSorted().map(function (p, i) {
+      const m = C.maps.filter(function (x) { return x.name === p.bestMap; })[0];
+      return { rank: i + 1, name: p.displayName, best: p.best, attempts: p.attempts, short: m ? m.short : '' };
+    });
+  }
+
+  function show(state) {
+    if (state === 'NAME_ENTRY') {
+      input.value = '';
+      nameError = '';
+      input.focus();
+    } else {
+      input.blur();
+    }
+  }
+
+  function setNameError(msg) { nameError = msg; }
+
+  // ---------------------------------------------------------------- input
+  function onKeyDown(e) {
+    const st = handlers.getState();
+
+    // Scurtături de organizator
+    if (e.ctrlKey && e.shiftKey && !e.altKey) {
+      if (e.code === 'KeyR') { e.preventDefault(); if (!e.repeat) handlers.onToggleResults(); return; }
+      if (e.code === 'KeyE') { e.preventDefault(); if (!e.repeat) handlers.onExport(); return; }
+      if (e.code === 'KeyJ') { e.preventDefault(); if (!e.repeat) handlers.onExportJson(); return; }
+      if (e.code === 'Delete') { e.preventDefault(); if (!e.repeat) handlers.onReset(); return; }
+      if (e.code === 'KeyH') { e.preventDefault(); if (!e.repeat) debug = !debug; return; }
+      return;
+    }
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+    if (e.code === 'Space') {
+      if (st === 'NAME_ENTRY') {
+        // Space e caracter normal în username, dar un Space ținut apăsat din ecranul anterior nu trebuie să scrie spații
+        if (e.repeat) e.preventDefault();
+        return;
+      }
+      e.preventDefault(); // fără scroll
+      if (!e.repeat) handlers.onSpace();
+      return;
+    }
+    if (e.key === 'Escape') {
+      if (!e.repeat) handlers.onEscape();
+      return;
+    }
+    if (st === 'RESULTS') {
+      const step = { ArrowUp: -1, ArrowDown: 1, PageUp: -8, PageDown: 8, Home: -1e6, End: 1e6 }[e.key];
+      if (step) { e.preventDefault(); resultsScroll += step; }
+      return;
+    }
+    if (e.key === 'Enter' && st === 'NAME_ENTRY') {
+      e.preventDefault();
+      if (!e.repeat) handlers.onNameSubmit(input.value);
+    }
+  }
+
+  function init(h) {
+    handlers = h;
+    ctx.imageSmoothingEnabled = false;
+    fctx.imageSmoothingEnabled = true;       // pozele se scalează cu netezire, spre deosebire de restul scenei
+    fctx.imageSmoothingQuality = 'high';
+    loadPhotos();
+    resize();
+    window.addEventListener('resize', resize);
+    window.addEventListener('keydown', onKeyDown);
+
+    // Doar caracterele permise intră în câmpul de username
+    input.addEventListener('input', function () {
+      const v = input.value.replace(/[^\p{L}\p{N} _-]/gu, '');
+      if (v !== input.value) input.value = v;
+      nameError = '';
+    });
+    // Câmpul trebuie să rămână focusat cât timp se introduce numele
+    input.addEventListener('blur', function () {
+      if (handlers.getState() === 'NAME_ENTRY') setTimeout(function () { input.focus(); }, 0);
+    });
+    document.addEventListener('mousedown', function (e) {
+      if (handlers.getState() === 'NAME_ENTRY') { e.preventDefault(); input.focus(); }
+    });
+
+    // Mouse: butonul „Rezultate", „Înapoi", roata și bara de derulare
+    const toArt = function (e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+    };
+    const scrollFromY = function (y) {
+      if (!resultsLayout || !resultsLayout.maxScroll) return;
+      const f = Math.max(0, Math.min(1, (y - resultsLayout.trackY) / resultsLayout.trackH));
+      resultsScroll = Math.round(f * resultsLayout.maxScroll);
+    };
+    const overButton = function () {
+      const st = handlers.getState();
+      return (st === 'ATTRACT' && inside(BTN_RESULTS, mouse)) || (st === 'RESULTS' && inside(BTN_BACK, mouse));
+    };
+    canvas.addEventListener('mousemove', function (e) {
+      const p = toArt(e);
+      mouse.x = p.x; mouse.y = p.y;
+      if (dragScroll) scrollFromY(p.y);
+      canvas.style.cursor = overButton() ? 'pointer' : 'default';
+    });
+    canvas.addEventListener('mouseleave', function () { mouse.x = mouse.y = -1; canvas.style.cursor = 'default'; });
+    canvas.addEventListener('mousedown', function (e) {
+      const p = toArt(e);
+      if (handlers.getState() === 'RESULTS' && resultsLayout && p.x >= RES_BAR_X - 2 && p.x <= RES_BAR_X + 6 && p.y >= resultsLayout.trackY - 2 && p.y <= resultsLayout.trackY + resultsLayout.trackH + 2) {
+        dragScroll = true;
+        scrollFromY(p.y);
+      }
+    });
+    window.addEventListener('mouseup', function () { dragScroll = false; });
+    canvas.addEventListener('click', function (e) {
+      const p = toArt(e);
+      const st = handlers.getState();
+      if (st === 'ATTRACT' && inside(BTN_RESULTS, p)) handlers.onToggleResults();
+      else if (st === 'RESULTS' && inside(BTN_BACK, p)) handlers.onEscape();
+    });
+    window.addEventListener('wheel', function (e) {
+      if (handlers.getState() !== 'RESULTS') return;
+      e.preventDefault();
+      const rows = Math.min(3, Math.max(1, Math.round(Math.abs(e.deltaY) / 100)));
+      resultsScroll += e.deltaY > 0 ? rows : -rows;
+    }, { passive: false });
+  }
+
+  return {
+    init: init, draw: draw, show: show, setNameError: setNameError,
+    renderAttract: renderAttract, renderReady: renderReady,
+    renderGameOver: renderGameOver, renderResults: renderResults
+  };
+})();
