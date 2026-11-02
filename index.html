@@ -12,6 +12,19 @@
     <canvas id="game" width="200" height="150"></canvas>
     <!-- Strat transparent, la rezoluție logică (800x600), pentru pozele personajelor: ca să se vadă clar, nu pixelate la 12x12 -->
     <canvas id="faces" width="800" height="600"></canvas>
+    <!-- Muzica: butonul din colțul dreapta-jos deschide sliderul de volum (logica în music.js) -->
+    <div id="music-ui">
+      <div id="music-panel" hidden>
+        <input id="music-volume" type="range" min="0" max="100" step="1" aria-label="Volumul muzicii">
+      </div>
+      <button id="music-btn" type="button" aria-label="Volumul muzicii" aria-expanded="false" aria-controls="music-panel">
+        <svg viewBox="0 0 9 8" aria-hidden="true">
+          <rect x="1" y="3" width="2" height="2"/><rect x="3" y="2" width="1" height="4"/><rect x="4" y="1" width="1" height="6"/>
+          <g class="waves"><rect x="6" y="3" width="1" height="2"/><rect x="7" y="2" width="1" height="1"/><rect x="7" y="5" width="1" height="1"/><rect x="8" y="3" width="1" height="2"/></g>
+          <g class="mute"><rect x="6" y="2" width="1" height="1"/><rect x="8" y="2" width="1" height="1"/><rect x="7" y="3" width="1" height="2"/><rect x="6" y="5" width="1" height="1"/><rect x="8" y="5" width="1" height="1"/></g>
+        </svg>
+      </button>
+    </div>
   </div>
   <!-- Câmp real, transparent, pus de ui.js exact peste câmpul desenat (pe telefon, atingerea lui deschide tastatura);
        textul se desenează pe canvas cu fontul bitmap -->

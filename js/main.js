@@ -90,13 +90,9 @@
 
     onSpace: function () {
       switch (state) {
-        case 'ATTRACT': {
-          // Numele ținut minte de data trecută: direct la READY, fără să-l mai scrii (se poate schimba din READY)
-          const v = Store.validateName(Store.lastName());
-          if (v.ok) goReady(v.name);
-          else setState('NAME_ENTRY');
+        case 'ATTRACT':
+          setState('NAME_ENTRY'); // câmpul vine precompletat cu numele de data trecută
           break;
-        }
         case 'READY':
           game.start();
           setState('PLAYING');
@@ -119,10 +115,6 @@
       if (!v.ok) { UI.setNameError(v.error); return; }
       Store.rememberName(v.name);
       goReady(v.name);
-    },
-
-    onChangeName: function () {
-      if (state === 'READY') setState('NAME_ENTRY');
     },
 
     onToggleResults: function () {

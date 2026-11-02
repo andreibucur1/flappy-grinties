@@ -43,6 +43,64 @@ canvas {
   pointer-events: none;
 }
 
+/* Butonul de muzică și sliderul de volum, în colțul dreapta-jos al scenei.
+   --px = mărimea unui pixel de artă în pixeli CSS (o setează ui.js), ca butonul să crească odată cu jocul. Culori din PALETTE. */
+#music-ui {
+  position: absolute;
+  right: calc(var(--px, 4px) * 2);
+  bottom: calc(var(--px, 4px) * 2);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--px, 4px);
+  line-height: normal;
+}
+
+#music-btn {
+  box-sizing: border-box;
+  width: calc(var(--px, 4px) * 13);
+  height: calc(var(--px, 4px) * 13);
+  margin: 0;
+  padding: calc(var(--px, 4px) * 2);
+  border: var(--px, 4px) solid #55331F;                     /* dirtDark */
+  background: #8E5530;                                       /* horse */
+  box-shadow: inset 0 var(--px, 4px) 0 #B8743F,              /* horseLit */
+              inset 0 calc(var(--px, 4px) * -1) 0 #633A20;   /* horseShade */
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+#music-btn svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: #FFE680;                                             /* goldLit */
+  shape-rendering: crispEdges;
+}
+
+#music-btn:hover svg,
+#music-btn:focus-visible svg { fill: #FFF4E0; }              /* creamLit */
+
+#music-ui.muted .waves,
+#music-ui:not(.muted) .mute { display: none; }
+
+#music-panel {
+  padding: calc(var(--px, 4px) * 2) calc(var(--px, 4px) * 3);
+  border: var(--px, 4px) solid #55331F;                     /* dirtDark */
+  background: #1F1746;                                       /* nightB */
+}
+
+#music-panel[hidden] { display: none; }
+
+#music-volume {
+  display: block;
+  width: calc(var(--px, 4px) * 50);
+  margin: 0;
+  accent-color: #E0A93A;                                     /* gold */
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 /* Câmpul de username: real și focusabil, dar transparent; ui.js îl așază peste câmpul desenat doar pe ecranul de nume.
    font-size 16px: sub atât, Safari pe iPhone face zoom la focus. */
 #name-input {

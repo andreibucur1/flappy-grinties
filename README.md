@@ -90,13 +90,13 @@ turso db shell flappy-grinties "DELETE FROM rounds WHERE username_key = 'numele-
 
 - **Desktop:** `Space` sau click la start → username + `Enter` (sau butonul **Start**) → `Space` sau click ca să începi → `Space` sau click = săritură.
 - **Telefon:** atinge ecranul la start → scrie numele (tastatura apare la atingerea câmpului) → **Start** sau Enter → atinge ecranul ca să începi și ca să sari.
-- **Numele se ține minte** (în `localStorage`, cheia `grinties_flappy_last_name_v1`): de la a doua tură, start-ul duce direct la ecranul „gata de joc", fără să mai scrii numele. Butonul **Schimbă numele** de pe acel ecran deschide câmpul, precompletat cu numele curent. La stand, unde joacă mai mulți pe același calculator, fiecare jucător nou apasă **Schimbă numele**.
+- **Numele se ține minte** (în `localStorage`, cheia `grinties_flappy_last_name_v1`): ecranul de nume apare la fiecare tură, dar câmpul vine completat cu numele de data trecută. Ajunge `Enter` / **Start**; un jucător nou îl șterge și scrie altul.
 
 Marginea de sus nu omoară: personajul doar nu poate urca mai sus. Obstacolele și solul omoară.
 
 ## Pornire la stand, fără internet
 
-Jocul merge și deschis direct din `index.html` (dublu-click, în Chrome, `F11` pentru ecran complet), dar atunci nu are server: Top 10 comun apare „Clasament indisponibil", iar turele jucate așa **nu ajung niciodată în baza de date** (coada lor e legată de pagina deschisă din fișier). Recordul personal, ecranul **Rezultate** și exportul CSV/JSON merg pe datele locale. Pentru clasamentul comun, deschide link-ul Vercel; dacă internetul cade în timpul evenimentului, turele se păstrează în coadă și se trimit singure când revine conexiunea.
+Jocul merge și deschis direct din `index.html` (dublu-click, în Chrome, `F11` pentru ecran complet), dar atunci nu are server: Top 10 comun apare „Clasament indisponibil", iar turele jucate așa **nu ajung niciodată în baza de date** (coada lor e legată de pagina deschisă din fișier). Recordul personal, ecranul de rezultate locale (`Ctrl+Shift+R`) și exportul CSV/JSON merg pe datele locale. Pentru clasamentul comun, deschide link-ul Vercel; dacă internetul cade în timpul evenimentului, turele se păstrează în coadă și se trimit singure când revine conexiunea.
 
 > **Important:** datele locale (`localStorage`) sunt legate de originea paginii. Jocul deschis din fișier, de pe `localhost` și de pe link-ul Vercel are trei seturi separate de date locale.
 
@@ -104,7 +104,7 @@ Jocul merge și deschis direct din `index.html` (dublu-click, în Chrome, `F11` 
 
 | Scurtătură | Ce face |
 |---|---|
-| `Ctrl+Shift+R` | Ecranul cu toți jucătorii **din datele locale ale acestui browser** (clasamentul complet e în baza de date), din ecranul de start sau de game over. Încă o dată = ieșire. Același ecran se deschide și din butonul **Rezultate** (colțul din dreapta jos al ecranului de start); **Înapoi** sau `Esc` revin. |
+| `Ctrl+Shift+R` | Ecranul cu toți jucătorii **din datele locale ale acestui browser** (clasamentul complet e în baza de date), din ecranul de start sau de game over. Încă o dată = ieșire; **Înapoi** sau `Esc` revin. Pe ecran nu mai există un buton pentru el: clasamentul pentru jucători e Top 10. |
 | Derulare în rezultate | Roata mouse-ului, bara aurie din dreapta (click sau tragere), `Sus`/`Jos`, `PageUp`/`PageDown`, `Home`/`End`. |
 | `Esc` | Ieșire din rezultate; anulează introducerea numelui |
 | `Ctrl+Shift+E` | Export **CSV** cu clasamentul complet (loc, jucător, record, hartă, ture, ultima tură, data recordului). Se deschide direct în Excel, cu diacritice corecte. **Fă-l periodic și la final.** |
@@ -115,7 +115,9 @@ Jocul merge și deschis direct din `index.html` (dublu-click, în Chrome, `F11` 
 
 ## Muzica
 
-Melodia din `music/fundal.mp3` rulează în buclă, pe tot parcursul jocului. Chrome nu pornește sunetul până nu apeși o tastă sau dai un click în pagină, deci **după ce deschizi jocul apasă o dată orice tastă** (de exemplu `Shift`). Volumul se reglează în `js/config.js` (`music.volume`, între 0 și 1). `Ctrl+Shift+M` oprește / pornește sunetul.
+Melodia din `music/fundal.mp3` rulează în buclă, pe tot parcursul jocului. Chrome nu pornește sunetul până nu apeși o tastă sau dai un click în pagină, deci **după ce deschizi jocul apasă o dată orice tastă** (de exemplu `Shift`). `Ctrl+Shift+M` oprește / pornește sunetul.
+
+**Volumul:** butonul cu difuzor din colțul dreapta-jos deschide un slider. Volumul ales se ține minte în browser (`localStorage`, cheia `grinties_flappy_volume_v1`); la 0 sunetul e oprit și iconița apare tăiată. Valoarea de pornire, până alege cineva alta, e `music.volume` din `js/config.js` (între 0 și 1). Pe iPhone, Safari nu lasă pagina să schimbe volumul: acolo sliderul doar oprește sunetul (la 0), restul se reglează din butoanele telefonului.
 
 Ca muzica să pornească singură, fără nicio apăsare, deschide Chrome cu opțiunea `--autoplay-policy=no-user-gesture-required` (din proprietățile comenzii rapide Chrome, la „Țintă").
 

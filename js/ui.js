@@ -25,10 +25,8 @@ const UI = (function () {
   const mouse = { x: -1, y: -1 };          // poziția mouse-ului, în pixeli de artă
   let dragScroll = false;                  // se trage de bara de derulare
   let resultsLayout = null;                // { trackY, trackH, visible, maxScroll }, calculat la desenare
-  const BTN_RESULTS = { x: 132, y: 135, w: 66, h: 13 };   // ecranul de start
   const BTN_BACK = { x: 150, y: 5, w: 42, h: 16 };        // ecranul de rezultate (mai înalt: „Î" are accent deasupra)
   const BTN_START = { x: 75, y: 93, w: 50, h: 13 };       // ecranul de nume, sub câmp (pentru telefon; Enter face același lucru)
-  const BTN_RENAME = { x: 55, y: 128, w: 90, h: 13 };     // ecranul READY: înapoi la ecranul de nume (numele e ținut minte)
   let pressState = null;                                  // starea în care a început ultimul click / ultima atingere
   const NAME_FIELD = { x: 23, y: 50, w: 154, h: 30 };     // câmpul de pergament; peste el stă <input>-ul real, transparent
   // top10: rows = null cât timp nu există nici răspuns, nici cache; stale = afișăm cache-ul („neactualizat")
@@ -99,6 +97,7 @@ const UI = (function () {
     const w = Math.round(W * s) + 'px', h = Math.round(H * s) + 'px';
     canvas.style.width = w; canvas.style.height = h;
     stage.style.width = w; stage.style.height = h;
+    stage.style.setProperty('--px', s + 'px'); // un pixel de artă, pentru butonul de muzică (style.css)
     placeInput();
   }
 
@@ -333,8 +332,6 @@ const UI = (function () {
     // pitch 11: coada literelor g j p q y și virgula de la ș/ț coboară 2 pixeli de artă sub linie și nu trebuie să atingă rândul următor
     drawBoard(22, 60, 156, 11, null);
     if (blink(600)) text(hint('Apasă Space sau click ca să joci', 'Atinge ecranul ca să joci'), W / 2, 122, 'creamLit', 1, 'center', false, 'nightA');
-    if (Store.warnings().length) text('! Vezi Rezultate', 4, 139, 'capLit', 1, 'left', false, 'nightA');
-    button(BTN_RESULTS, 'Rezultate');
   }
 
   function drawNameEntry() {
@@ -361,7 +358,6 @@ const UI = (function () {
     text(info.playerName, W / 2, 16 + (s === 2 ? 0 : 3), 'goldLit', s, 'center', 'dirtDark');
     text('Harta: ' + data.readyMap, W / 2, 38, 'creamLit', 1, 'center');
     if (blink(600)) text(hint('Space sau click ca să începi', 'Atinge ecranul ca să începi'), W / 2, 116, 'creamLit', 1, 'center', false, 'nightA');
-    button(BTN_RENAME, 'Schimbă numele');
   }
 
   function drawPlaying(game, info) {
@@ -587,11 +583,13 @@ const UI = (function () {
       nameError = '';
     });
     // Câmpul trebuie să rămână focusat cât timp se introduce numele
-    input.addEventListener('blur', function () {
+    input.addEventListener('blur', function (e) {
+      if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#music-ui')) return; // sliderul de volum ia focusul
       if (handlers.getState() === 'NAME_ENTRY') setTimeout(function () { input.focus(); }, 0);
     });
     document.addEventListener('mousedown', function (e) {
       if (e.target === input) return; // click / atingere direct pe câmp: lăsăm browserul să-l focuseze (deschide tastatura)
+      if (e.target.closest && e.target.closest('#music-ui')) return; // butonul și sliderul de muzică trebuie să primească click-ul
       if (handlers.getState() === 'NAME_ENTRY') { e.preventDefault(); input.focus(); }
     });
 
@@ -603,8 +601,6 @@ const UI = (function () {
       if (!touch && e.button !== 0) return;                            // doar butonul stâng al mouse-ului
       const p = toArt(e);
       if (st === 'RESULTS') return;                                   // derularea și „Înapoi" merg prin click
-      if (st === 'ATTRACT' && inside(BTN_RESULTS, p)) return;          // „Rezultate" merge prin click
-      if (st === 'READY' && inside(BTN_RENAME, p)) return;             // „Schimbă numele" merge prin click
       if (st === 'NAME_ENTRY') {
         // pe telefon focusul deschide tastatura; cu mouse-ul îl ține handler-ul de mousedown. „Start" merge prin click
         if (touch) { e.preventDefault(); if (!inside(BTN_START, p)) input.focus(); }
@@ -622,8 +618,7 @@ const UI = (function () {
     };
     const overButton = function () {
       const st = handlers.getState();
-      return (st === 'ATTRACT' && inside(BTN_RESULTS, mouse)) || (st === 'RESULTS' && inside(BTN_BACK, mouse)) ||
-             (st === 'NAME_ENTRY' && inside(BTN_START, mouse)) || (st === 'READY' && inside(BTN_RENAME, mouse));
+      return (st === 'RESULTS' && inside(BTN_BACK, mouse)) || (st === 'NAME_ENTRY' && inside(BTN_START, mouse));
     };
     canvas.addEventListener('mousemove', function (e) {
       const p = toArt(e);
@@ -645,10 +640,8 @@ const UI = (function () {
       const st = handlers.getState();
       // Un click care tocmai a schimbat ecranul (pointerdown = Space) nu apasă și un buton de pe ecranul nou
       if (st !== pressState) return;
-      if (st === 'ATTRACT' && inside(BTN_RESULTS, p)) handlers.onToggleResults();
-      else if (st === 'RESULTS' && inside(BTN_BACK, p)) handlers.onEscape();
+      if (st === 'RESULTS' && inside(BTN_BACK, p)) handlers.onEscape();
       else if (st === 'NAME_ENTRY' && inside(BTN_START, p)) handlers.onNameSubmit(input.value);
-      else if (st === 'READY' && inside(BTN_RENAME, p)) handlers.onChangeName();
     });
     window.addEventListener('wheel', function (e) {
       if (handlers.getState() !== 'RESULTS') return;
