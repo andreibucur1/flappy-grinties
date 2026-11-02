@@ -34,6 +34,7 @@ const CONFIG = {
   firstPillarOffset: 140,  // cât de departe în dreapta ecranului apare primul obstacol
   gameOverInputLockMs: 700,// Space e ignorat atât după game over, ca să nu sară peste ecran un spam de Space
   bannerMs: 1500,          // durata bannerului cu numele hărții
+  top10PageMs: 4000,       // Top 10 se arată pe pagini de câte 5 (1-5, 6-10); cât stă fiecare pagină pe ecran
   music: { src: "music/fundal.mp3", volume: 0.4 }, // melodia de fundal, în buclă; volume între 0 și 1
 
   // Personajul = poza membrului (PNG decupat, fundal transparent, din characters/). Numele NU se afișează jucătorilor;

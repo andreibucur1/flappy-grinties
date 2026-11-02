@@ -7,7 +7,6 @@
     "node": ">=20.12"
   },
   "scripts": {
-    "dev": "vercel dev",
     "db:migrate": "node scripts/migrate.mjs",
     "test": "node --test"
   },

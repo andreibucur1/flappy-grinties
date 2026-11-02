@@ -243,30 +243,53 @@ const UI = (function () {
   // ---------------------------------------------------------------- clasament
   const RANK_COLORS = ['goldLit', 'stoneLit', 'horseLit']; // aur, argint, bronz
 
-  // Top 10 comun, în două coloane de câte 5 (1-5 stânga, 6-10 dreapta), la scara 1.
-  // x = marginea stângă a primei coloane; colW = lățimea unei coloane; între coloane sunt 8 pixeli.
-  // Rândul jucătorului curent (highlightKey) e evidențiat.
-  function drawBoard(x, y, colW, pitch, highlightKey) {
+  // Top 10 comun: o singură coloană pe toată lățimea, ca numele de 12 caractere să încapă întregi.
+  // Pe ecran încap 5 rânduri, deci locurile 1-5 și 6-10 alternează (CONFIG.top10PageMs).
+  // Pe game over se începe cu pagina pe care e jucătorul curent (highlightKey); rândul lui e evidențiat.
+  const PAGE = 5;
+  let boardStart = 0;   // de când se numără paginile (intrarea pe ecran)
+
+  // { rows, page, pages } pentru momentul curent; rows = null / [] când nu e nimic de afișat
+  function boardPage(highlightKey) {
+    const rows = data.top10.rows ? data.top10.rows.slice(0, 10) : data.top10.rows;
+    const pages = rows ? Math.max(1, Math.ceil(rows.length / PAGE)) : 1;
+    let first = 0;
+    if (highlightKey && rows) {
+      const i = rows.findIndex(function (p) { return p.key === highlightKey; });
+      if (i >= 0) first = Math.floor(i / PAGE);
+    }
+    const page = (first + Math.floor((performance.now() - boardStart) / C.top10PageMs)) % pages;
+    return { rows: rows, page: page, pages: pages };
+  }
+
+  // Ce se scrie lângă titlul „Top 10": pagina („1-5" / „6-10", '' dacă e o singură pagină) și „neactualizat" dacă e cache-ul
+  function boardLabels(highlightKey) {
+    const b = boardPage(highlightKey);
+    return { page: b.pages > 1 ? (b.page === 0 ? '1-5' : '6-10') : '', stale: data.top10.stale ? 'neactualizat' : '' };
+  }
+
+  // x = marginea stângă; w = lățimea tabelului
+  function drawBoard(x, y, w, pitch, highlightKey) {
     const t = data.top10;
+    const b = boardPage(highlightKey);
     const midY = y + 2 * pitch;
-    if (!t.rows) {
-      text(t.loading ? 'Se încarcă…' : 'Clasament indisponibil', x + colW + 4, midY, 'creamLit', 1, 'center');
+    if (!b.rows) {
+      text(t.loading ? 'Se încarcă…' : 'Clasament indisponibil', x + w / 2, midY, 'creamLit', 1, 'center');
       return;
     }
-    if (!t.rows.length) {
-      text('Niciun scor încă. Fii primul!', x + colW + 4, midY, 'creamLit', 1, 'center');
+    if (!b.rows.length) {
+      text('Niciun scor încă. Fii primul!', x + w / 2, midY, 'creamLit', 1, 'center');
       return;
     }
-    t.rows.slice(0, 10).forEach(function (p, i) {
-      const cx = x + (i < 5 ? 0 : colW + 8);
-      const ry = y + (i % 5) * pitch;
-      const rank = p.rank || i + 1;
+    b.rows.slice(b.page * PAGE, b.page * PAGE + PAGE).forEach(function (p, i) {
+      const ry = y + i * pitch;
+      const rank = p.rank || b.page * PAGE + i + 1;
       const score = String(p.score);
-      if (highlightKey && p.key === highlightKey) box(cx - 2, ry - 2, colW + 4, 11, 'mtnNightLit');
-      text(String(rank), cx + 11, ry, RANK_COLORS[rank - 1] || 'creamLit', 1, 'right');
-      text(score, cx + colW, ry, 'goldLit', 1, 'right');
-      const avail = colW - 15 - Font.measure(score, 1) - 3;
-      text(Font.clip(p.name, avail, 1), cx + 15, ry, 'creamLit', 1);
+      if (highlightKey && p.key === highlightKey) box(x - 2, ry - 2, w + 4, 11, 'mtnNightLit');
+      text(String(rank), x + 11, ry, RANK_COLORS[rank - 1] || 'creamLit', 1, 'right');
+      text(score, x + w, ry, 'goldLit', 1, 'right');
+      const avail = w - 16 - Font.measure(score, 1) - 4; // 12 caractere încap mereu; clip doar ca plasă de siguranță
+      text(Font.clip(p.name, avail, 1), x + 16, ry, 'creamLit', 1);
     });
   }
 
@@ -300,10 +323,13 @@ const UI = (function () {
     const ts = Font.fit(title, W - 10, 2);
     text(title, W / 2, 9, 'goldLit', ts, 'center', 'dirtDark', 'dirtDark');
     panel(10, 31, 180, 87);
-    text('Top 10', W / 2, 37, 'creamLit', 2, 'center');
-    if (data.top10.stale) text('neactualizat', W / 2, 51, 'stoneLit', 1, 'center');
+    // Titlul în stânga, pagina și „neactualizat" în dreapta (sub titlu nu e loc: coada lui „p" coboară până la rândul 55)
+    text('Top 10', 22, 37, 'creamLit', 2);
+    const lb = boardLabels(null);
+    if (lb.page) text(lb.page, 178, 39, 'stoneLit', 1, 'right');
+    if (lb.stale) text(lb.stale, 178, 48, 'stoneLit', 1, 'right');
     // pitch 11: coada literelor g j p q y și virgula de la ș/ț coboară 2 pixeli de artă sub linie și nu trebuie să atingă rândul următor
-    drawBoard(16, 60, 80, 11, null);
+    drawBoard(22, 60, 156, 11, null);
     if (blink(600)) text(hint('Apasă Space ca să joci', 'Atinge ecranul ca să joci'), W / 2, 122, 'creamLit', 1, 'center', false, 'nightA');
     if (Store.warnings().length) text('! Vezi Rezultate', 4, 139, 'capLit', 1, 'left', false, 'nightA');
     button(BTN_RESULTS, 'Rezultate');
@@ -355,12 +381,16 @@ const UI = (function () {
     if (r.res.isRecord) {
       if (blink(400)) text('Record nou!', W / 2, 48, 'grassLit', 1, 'center');
     } else {
-      text(Font.clip('Recordul tău (' + r.res.displayName + '): ' + r.res.best, 172, 1), W / 2, 48, 'creamLit', 1, 'center');
+      // Numele nu se taie: dacă nu încape întreg pe rând, rândul rămâne fără el
+      const withName = 'Recordul tău (' + r.res.displayName + '): ' + r.res.best;
+      text(Font.measure(withName, 1) <= 176 ? withName : 'Recordul tău: ' + r.res.best, W / 2, 48, 'creamLit', 1, 'center');
     }
     const st = SAVE_STATUS[data.saveStatus];
     if (st) Font.wrap(st.text, 29).forEach(function (l, i) { text(l, W / 2, 57 + i * 10, st.color, 1, 'center'); });
-    text('Top 10' + (data.top10.stale ? ' (neactualizat)' : ''), W / 2, 77, 'stoneLit', 1, 'center');
-    drawBoard(14, 87, 82, 10, r.res.key);
+    const lb = boardLabels(r.res.key);
+    const label = [lb.page, lb.stale].filter(Boolean).join(', ');
+    text('Top 10' + (label ? ' (' + label + ')' : ''), W / 2, 77, 'stoneLit', 1, 'center');
+    drawBoard(20, 87, 160, 10, r.res.key);
     text(hint('Space pentru ecranul de start', 'Atinge ecranul pentru start'), W / 2, 137, 'stoneLit', 1, 'center');
   }
 
@@ -439,12 +469,13 @@ const UI = (function () {
   }
 
   // ---------------------------------------------------------------- date pentru ecrane (apelate din main.js la schimbarea stării)
-  function renderAttract() { data.saveStatus = null; }
+  function renderAttract() { data.saveStatus = null; boardStart = performance.now(); }
 
   function renderReady(playerName, mapName) { data.readyName = playerName; data.readyMap = mapName; }
 
   function renderGameOver(res, score, mapName) {
     data.over = { res: res, score: score, mapName: mapName };
+    boardStart = performance.now();
   }
 
   // 'saving' | 'saved' | 'offline' | 'rejected'

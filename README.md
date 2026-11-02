@@ -24,7 +24,7 @@ Secretele Turso (URL și token) stau doar în variabilele de mediu Vercel și î
 
 ## Configurare (o singură dată, din terminalul VS Code)
 
-Cerințe: **Node.js ≥ 20.12** (scriptul de migrare citește singur `.env.local` cu `process.loadEnvFile`), un cont Vercel și un cont Turso. Toate comenzile se rulează **din folderul `JOC GRINTIES`** (acolo e `package.json`).
+Cerințe: **Node.js ≥ 20.12** (scriptul de migrare citește singur `.env.local` cu `process.loadEnvFile`), un cont Vercel și un cont Turso. Toate comenzile se rulează **din rădăcina repo-ului** (acolo e `package.json` și, după `vercel link`, folderul `.vercel/`).
 
 ```bash
 # 1. Turso CLI. Pe Windows merge doar prin WSL: în PowerShell rulezi `wsl`, apoi în shellul WSL:
@@ -38,8 +38,8 @@ turso db tokens create flappy-grinties        # → TURSO_AUTH_TOKEN
 npm i -g vercel
 vercel login
 vercel link                                   # leagă folderul de un proiect Vercel
-vercel env add TURSO_DATABASE_URL             # lipește URL-ul (fără argument de mediu = toate mediile)
-vercel env add TURSO_AUTH_TOKEN               # lipește token-ul
+vercel env add TURSO_DATABASE_URL             # lipește DOAR valoarea (libsql://...), o singură dată; fără mediu = toate mediile
+vercel env add TURSO_AUTH_TOKEN               # lipește DOAR token-ul, o singură dată
 vercel env pull .env.local                    # aduce variabilele mediului Development, pentru migrare
 
 # 3. Dependențe, schema, teste
@@ -57,7 +57,7 @@ vercel --prod                                 # → https://<proiect>.vercel.app
 Note despre comenzi (verificate pe 2 noiembrie 2026 în documentația oficială vercel.com/docs și docs.turso.tech):
 
 - `vercel env add` salvează variabilele ca **Secret** în Production și Preview, și ca **Config** în Development. Valorile Secret nu se mai pot citi după creare, dar `vercel env pull` aduce implicit mediul Development, deci `.env.local` primește valorile reale.
-- Dacă proiectul Vercel e legat de repo-ul GitHub (deploy automat la push), în setările proiectului **Root Directory** trebuie să fie `JOC GRINTIES`.
+- Dacă `/api/top10` dă `500` în producție, cauza exactă e în `vercel logs --environment production --query "level:error"`. Un `URL_INVALID` înseamnă că în variabila `TURSO_DATABASE_URL` a ajuns altceva decât URL-ul; se șterge cu `vercel env rm`, se adaugă din nou și se face `vercel --prod` (o variabilă schimbată nu se aplică deploy-urilor existente).
 - **Fără Turso, local:** `TURSO_DATABASE_URL=file:local.db` (fără token) funcționează cu același cod; `*.db` e ignorat de git.
 
 ### Verificare rapidă cu `curl` (cu `vercel dev` pornit)
