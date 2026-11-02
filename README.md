@@ -119,6 +119,8 @@ Jocul merge și deschis direct din `index.html` (dublu-click, în Chrome, `F11` 
 
 Melodia din `music/fundal.mp3` rulează în buclă, pe tot parcursul jocului. Chrome nu pornește sunetul până nu apeși o tastă sau dai un click în pagină, deci **după ce deschizi jocul apasă o dată orice tastă** (de exemplu `Shift`). `Ctrl+Shift+M` oprește / pornește sunetul.
 
+Când tab-ul nu e vizibil (alt tab, altă aplicație, ecranul telefonului blocat), muzica se oprește și pornește din nou la întoarcere.
+
 **Volumul:** butonul cu difuzor din colțul dreapta-jos al ecranului de start (cel cu Top 10) deschide un slider. Volumul ales se ține minte în browser (`localStorage`, cheia `grinties_flappy_volume_v1`); la 0 sunetul e oprit și iconița apare tăiată. Valoarea de pornire, până alege cineva alta, e `music.volume` din `js/config.js` (între 0 și 1). Pe iPhone, Safari nu lasă pagina să schimbe volumul: acolo sliderul doar oprește sunetul (la 0), restul se reglează din butoanele telefonului.
 
 Ca muzica să pornească singură, fără nicio apăsare, deschide Chrome cu opțiunea `--autoplay-policy=no-user-gesture-required` (din proprietățile comenzii rapide Chrome, la „Țintă").
