@@ -34,19 +34,19 @@ function loadApi(responses) {
 
 const R = (id) => ({ roundId: id, username: 'Ana', score: 3, map: 'Moci' });
 
-test('coada: ok și duplicate scot tura; 400 o scoate ca respinsă', async () => {
+test('coada: ok (record sau nu) scoate tura; 400 o scoate ca respinsă', async () => {
   const { Api, queue } = loadApi((r) =>
     r.roundId === 'round-bad' ? { status: 400, body: { ok: false, error: 'score_invalid' } }
-      : r.roundId === 'round-dup' ? { status: 200, body: { ok: true, duplicate: true } }
-        : { status: 200, body: { ok: true } });
+      : r.roundId === 'round-dup' ? { status: 200, body: { ok: true, saved: false } }
+        : { status: 200, body: { ok: true, saved: true } });
   Api.queueRound(R('round-001'));
   Api.queueRound(R('round-bad'));
   Api.queueRound(R('round-dup'));
   const saved = await Api.flushQueue();
-  assert.equal(saved, 2);
+  assert.equal(saved, 1); // doar recordurile se numără: ele schimbă Top 10
   assert.deepEqual(queue(), []);
   assert.equal(Api.roundStatus('round-001'), 'saved');
-  assert.equal(Api.roundStatus('round-dup'), 'saved');
+  assert.equal(Api.roundStatus('round-dup'), 'notbest');
   assert.equal(Api.roundStatus('round-bad'), 'rejected');
 });
 

@@ -1,7 +1,8 @@
-// POST /api/score  { roundId, username, score, map }
+// POST /api/score  { roundId, username, score, map } → { ok: true, saved: true|false }
+// Se salvează doar un record (scor mai mare decât cel al jucătorului); altfel saved: false și nu se scrie nimic.
 import { getDb } from '../lib/db.js';
 import { sendJson, readJsonBody } from '../lib/http.js';
-import { insertRound } from '../lib/rounds.js';
+import { saveBest } from '../lib/players.js';
 import { validateRound } from '../lib/validate.js';
 
 // getClient se injectează, ca testele să ruleze handler-ul peste o bază locală temporară
@@ -22,8 +23,8 @@ export function createScoreHandler(getClient) {
     if (!v.ok) return sendJson(res, 400, { ok: false, error: v.error });
 
     try {
-      const rs = await insertRound(getClient(), v.round);
-      return sendJson(res, 200, rs.rowsAffected === 0 ? { ok: true, duplicate: true } : { ok: true });
+      const rs = await saveBest(getClient(), v.round);
+      return sendJson(res, 200, { ok: true, saved: rs.rowsAffected > 0 });
     } catch (err) {
       console.error('POST /api/score:', err);
       return sendJson(res, 500, { ok: false, error: 'server_error' });

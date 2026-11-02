@@ -6,7 +6,7 @@ Jocul rulează online, pe un link public Vercel, și are un **Top 10 comun** pen
 browser (telefon / laptop) ──https──► Vercel
                                        ├─ index.html, js/, style.css   (jocul, fișiere statice)
                                        ├─ /api/score  (POST)  ─┐
-                                       └─ /api/top10  (GET)   ─┴─► Turso, tabelul rounds
+                                       └─ /api/top10  (GET)   ─┴─► Turso, tabelul players
 ```
 
 Secretele Turso (URL și token) stau doar în variabilele de mediu Vercel și în `.env.local` (ignorat de git), niciodată în codul din browser.
@@ -17,7 +17,7 @@ Secretele Turso (URL și token) stau doar în variabilele de mediu Vercel și î
 |---|---|
 | `index.html`, `style.css`, `js/` | Jocul (scripturi clasice, fără framework). `js/api.js` vorbește cu serverul și ține coada de ture netrimise. |
 | `api/score.js`, `api/top10.js` | Vercel Functions (Node.js). |
-| `lib/` | Validare, interogarea Top 10, inserare, clientul libsql. Fără cod de rețea în `validate.js`. |
+| `lib/` | Validare, salvarea recordului (`players.js`), interogarea Top 10, clientul libsql. Fără cod de rețea în `validate.js`. |
 | `db/schema.sql` | Schema bazei de date. |
 | `scripts/migrate.mjs` | Aplică schema (`npm run db:migrate`). |
 | `tests/` | Teste automate (`npm test`), pe o bază SQLite locală temporară, fără rețea. |
@@ -73,16 +73,19 @@ Pe Windows (Git Bash, PowerShell) diacriticele scrise direct în linia de comand
 
 ### Moderare
 
-Ștergerea unui username nepotrivit, tot din terminal:
+Ștergerea unui username nepotrivit, tot din terminal. Se șterge și din arhiva `rounds`, altfel `npm run db:migrate` l-ar adăuga din nou în `players`:
 
 ```bash
-turso db shell flappy-grinties "DELETE FROM rounds WHERE username_key = 'numele-in-litere-mici';"
+turso db shell flappy-grinties "DELETE FROM players WHERE username_key = 'numele-in-litere-mici'; DELETE FROM rounds WHERE username_key = 'numele-in-litere-mici';"
 ```
 
 ## Cum funcționează salvarea
 
-- La game over tura (`roundId` unic, username, scor, hartă) intră întâi în coada `localStorage["grinties_flappy_pending_v1"]`, apoi se trimite. Pe ecran apare „Se salvează…", apoi „Scor salvat", „Fără conexiune — scorul se trimite automat mai târziu" sau „Scor respins".
-- Coada se golește în ordine la game over, la încărcarea paginii și când revine conexiunea. Serverul e idempotent: aceeași tură trimisă de două ori apare o singură dată în bază.
+- La game over tura (`roundId` unic, username, scor, hartă) intră întâi în coada `localStorage["grinties_flappy_pending_v1"]`, apoi se trimite. Pe ecran apare „Se salvează…", apoi „Record salvat", „Nu e record, nu s-a salvat", „Fără conexiune — scorul se trimite automat mai târziu" sau „Scor respins".
+- Coada se golește în ordine la game over, la încărcarea paginii și când revine conexiunea.
+- **În baza de date se păstrează doar recordul fiecărui jucător** (tabelul `players`, un rând per username fără diferențe de majuscule). `POST /api/score` scrie numai dacă scorul e mai mare decât recordul și răspunde `{ok:true, saved:true}`; altfel nu scrie nimic și răspunde `{ok:true, saved:false}`. La egalitate rămâne cel care a atins scorul primul. Aceeași tură trimisă de două ori nu schimbă nimic a doua oară.
+- Top 10 citește doar primele 10 rânduri din `players`, prin indexul pe record, deci costul nu crește cu numărul de ture jucate.
+- Tabelul `rounds` (toate turele jucate până la această schimbare) nu mai primește rânduri; rămâne ca arhivă. `npm run db:migrate` completează `players` din el și se poate rula de oricâte ori.
 - Top 10 se încarcă la ecranul de start și după fiecare salvare reușită. Dacă serverul nu răspunde, se afișează ultimul Top 10 primit, cu mențiunea „neactualizat".
 - Username: 1–12 caractere, litere (inclusiv ă â î ș ț), cifre, spațiu, `-` și `_`, fără `-` la început. Scor între 0 și 1000 (`MAX_SCORE` în `lib/validate.js`).
 

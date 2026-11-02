@@ -438,7 +438,8 @@ const UI = (function () {
 
   const SAVE_STATUS = {
     saving: { text: 'Se salvează…', color: 'creamLit' },
-    saved: { text: 'Scor salvat', color: 'grassLit' },
+    saved: { text: 'Record salvat', color: 'grassLit' },
+    notbest: { text: 'Nu e record, nu s-a salvat', color: 'stoneLit' },
     offline: { text: 'Fără conexiune — scorul se trimite automat mai târziu', color: 'capLit' },
     rejected: { text: 'Scor respins', color: 'capLit' }
   };

@@ -1,7 +1,7 @@
 import { test, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { tempDb, round, mockReq, mockRes } from './helpers.js';
-import { insertRound } from '../lib/rounds.js';
+import { saveBest } from '../lib/players.js';
 import { getTop10 } from '../lib/top10.js';
 import { validateRound } from '../lib/validate.js';
 import { createTop10Handler } from '../api/top10.js';
@@ -14,7 +14,7 @@ after(async () => { await db.close(); });
 async function play(username, score, map) {
   const v = validateRound(round(username, score, map));
   assert.equal(v.ok, true, username);
-  await insertRound(db.client, v.round);
+  await saveBest(db.client, v.round);
 }
 
 test('top10: „Test" (5) apoi „test" (8) → o singură intrare, name „Test", score 8', async () => {
@@ -70,4 +70,28 @@ test('GET /api/top10: răspuns complet, cu Cache-Control: no-store', async () =>
   const post = mockRes();
   await handler(mockReq('POST', {}), post);
   assert.equal(post.statusCode, 405);
+});
+
+// Migrarea completează players din turele vechi (rounds), cu regulile vechiului Top 10, și nu schimbă nimic la a doua rulare
+test('migrare: recordurile din rounds intră în players', async () => {
+  const old = [
+    ['r-0001', 'Ana', 'ana', 5, 'Poiana', '2026-11-02T10:00:00.000Z'],
+    ['r-0002', 'ANA', 'ana', 9, 'Bradu', '2026-11-02T10:01:00.000Z'],
+    ['r-0003', 'ana', 'ana', 9, 'Moci', '2026-11-02T10:02:00.000Z'],   // egal, mai târziu: nu contează
+    ['r-0004', 'Ion', 'ion', 9, 'Moci', '2026-11-02T09:00:00.000Z'],   // același scor, atins mai devreme
+    ['r-0005', 'Ștefănel', 'ștefănel', 2, 'Poiana', '2026-11-02T11:00:00.000Z']
+  ];
+  for (const r of old) {
+    await db.client.execute({ sql: 'INSERT INTO rounds (round_id, username, username_key, score, map, created_at) VALUES (?, ?, ?, ?, ?, ?)', args: r });
+  }
+  await db.migrate();
+  const expected = [
+    { rank: 1, name: 'Ion', score: 9, map: 'Moci' },
+    { rank: 2, name: 'Ana', score: 9, map: 'Bradu' },
+    { rank: 3, name: 'Ștefănel', score: 2, map: 'Poiana' }
+  ];
+  assert.deepEqual(await getTop10(db.client), expected);
+  await play('Ana', 4);         // după migrare: scor mai mic, nu schimbă nimic
+  await db.migrate();           // a doua rulare
+  assert.deepEqual(await getTop10(db.client), expected);
 });

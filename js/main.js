@@ -39,7 +39,7 @@
     Api.flushQueue().then(function (saved) {
       if (state === 'GAME_OVER' && lastRoundId) {
         const st = Api.roundStatus(lastRoundId);
-        UI.setSaveStatus(st === 'saved' ? 'saved' : st === 'rejected' ? 'rejected' : 'offline');
+        UI.setSaveStatus(st === 'saved' || st === 'notbest' || st === 'rejected' ? st : 'offline');
       }
       if (saved > 0) loadTop10();
     });
