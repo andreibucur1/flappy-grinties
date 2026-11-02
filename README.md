@@ -88,14 +88,17 @@ turso db shell flappy-grinties "DELETE FROM rounds WHERE username_key = 'numele-
 
 ## Cum se joacă
 
-- **Desktop:** `Space` la start → username + `Enter` (sau butonul **Start**) → `Space` ca să începi → `Space` = săritură. Click-ul de mouse nu sare.
-- **Telefon:** atinge ecranul la start → scrie numele (tastatura apare la atingerea câmpului) → **Start** sau Enter → atinge ecranul ca să începi și ca să sari.
+- **Desktop:** `Space` sau click la start → ecranul de nume și personaj → `Space` (sau `Enter`, sau butonul **Start**) → `Space` sau click ca să începi → `Space` sau click = săritură.
+- **Telefon:** atinge ecranul la start → (atinge câmpul dacă vrei alt nume) → **Start** → atinge ecranul ca să începi și ca să sari.
+- **Ecranul de nume și personaj:** câmpul vine completat cu numele de data trecută (`localStorage`, cheia `grinties_flappy_last_name_v1`) și **nu e activ**, deci `Space` pornește direct. Ca să schimbi numele, dai click pe câmp sau începi să scrii; cât scrii, `Space` e spațiu în nume, iar `Enter` pornește. Un click în afara câmpului îl dezactivează din nou.
+- **Personajul se alege** pe același ecran, din rândul cu cele 6 poze de sub câmp: click sau atingere pe poză, ori săgețile `←` / `→`. Cel ales are chenar auriu; ultimul ales e preselectat data viitoare (cheia `grinties_flappy_character_v2`). Prima dată e preselectat unul la întâmplare.
+- Butonul de muzică apare doar pe ecranul de start, cu Top 10.
 
 Marginea de sus nu omoară: personajul doar nu poate urca mai sus. Obstacolele și solul omoară.
 
 ## Pornire la stand, fără internet
 
-Jocul merge și deschis direct din `index.html` (dublu-click, în Chrome, `F11` pentru ecran complet), dar atunci nu are server: Top 10 comun apare „Clasament indisponibil", iar turele jucate așa **nu ajung niciodată în baza de date** (coada lor e legată de pagina deschisă din fișier). Recordul personal, ecranul **Rezultate** și exportul CSV/JSON merg pe datele locale. Pentru clasamentul comun, deschide link-ul Vercel; dacă internetul cade în timpul evenimentului, turele se păstrează în coadă și se trimit singure când revine conexiunea.
+Jocul merge și deschis direct din `index.html` (dublu-click, în Chrome, `F11` pentru ecran complet), dar atunci nu are server: Top 10 comun apare „Clasament indisponibil", iar turele jucate așa **nu ajung niciodată în baza de date** (coada lor e legată de pagina deschisă din fișier). Recordul personal, ecranul de rezultate locale (`Ctrl+Shift+R`) și exportul CSV/JSON merg pe datele locale. Pentru clasamentul comun, deschide link-ul Vercel; dacă internetul cade în timpul evenimentului, turele se păstrează în coadă și se trimit singure când revine conexiunea.
 
 > **Important:** datele locale (`localStorage`) sunt legate de originea paginii. Jocul deschis din fișier, de pe `localhost` și de pe link-ul Vercel are trei seturi separate de date locale.
 
@@ -103,7 +106,7 @@ Jocul merge și deschis direct din `index.html` (dublu-click, în Chrome, `F11` 
 
 | Scurtătură | Ce face |
 |---|---|
-| `Ctrl+Shift+R` | Ecranul cu toți jucătorii **din datele locale ale acestui browser** (clasamentul complet e în baza de date), din ecranul de start sau de game over. Încă o dată = ieșire. Același ecran se deschide și din butonul **Rezultate** (colțul din dreapta jos al ecranului de start); **Înapoi** sau `Esc` revin. |
+| `Ctrl+Shift+R` | Ecranul cu toți jucătorii **din datele locale ale acestui browser** (clasamentul complet e în baza de date), din ecranul de start sau de game over. Încă o dată = ieșire; **Înapoi** sau `Esc` revin. Pe ecran nu mai există un buton pentru el: clasamentul pentru jucători e Top 10. |
 | Derulare în rezultate | Roata mouse-ului, bara aurie din dreapta (click sau tragere), `Sus`/`Jos`, `PageUp`/`PageDown`, `Home`/`End`. |
 | `Esc` | Ieșire din rezultate; anulează introducerea numelui |
 | `Ctrl+Shift+E` | Export **CSV** cu clasamentul complet (loc, jucător, record, hartă, ture, ultima tură, data recordului). Se deschide direct în Excel, cu diacritice corecte. **Fă-l periodic și la final.** |
@@ -114,7 +117,9 @@ Jocul merge și deschis direct din `index.html` (dublu-click, în Chrome, `F11` 
 
 ## Muzica
 
-Melodia din `music/fundal.mp3` rulează în buclă, pe tot parcursul jocului. Chrome nu pornește sunetul până nu apeși o tastă sau dai un click în pagină, deci **după ce deschizi jocul apasă o dată orice tastă** (de exemplu `Shift`). Volumul se reglează în `js/config.js` (`music.volume`, între 0 și 1). `Ctrl+Shift+M` oprește / pornește sunetul.
+Melodia din `music/fundal.mp3` rulează în buclă, pe tot parcursul jocului. Chrome nu pornește sunetul până nu apeși o tastă sau dai un click în pagină, deci **după ce deschizi jocul apasă o dată orice tastă** (de exemplu `Shift`). `Ctrl+Shift+M` oprește / pornește sunetul.
+
+**Volumul:** butonul cu difuzor din colțul dreapta-jos al ecranului de start (cel cu Top 10) deschide un slider. Volumul ales se ține minte în browser (`localStorage`, cheia `grinties_flappy_volume_v1`); la 0 sunetul e oprit și iconița apare tăiată. Valoarea de pornire, până alege cineva alta, e `music.volume` din `js/config.js` (între 0 și 1). Pe iPhone, Safari nu lasă pagina să schimbe volumul: acolo sliderul doar oprește sunetul (la 0), restul se reglează din butoanele telefonului.
 
 Ca muzica să pornească singură, fără nicio apăsare, deschide Chrome cu opțiunea `--autoplay-policy=no-user-gesture-required` (din proprietățile comenzii rapide Chrome, la „Țintă").
 
@@ -129,7 +134,7 @@ Totul e în `js/config.js`: gravitație, săritură, `gap`/`speed`/`spacing` per
 
 ## Personajele
 
-Personajul fiecărei ture e poza unuia dintre cei 6 membri, aleasă aleatoriu (`characters/<nume>.png`, fundal transparent). Pozele sunt singurele imagini din joc și nu sunt în paleta 8-bit. Dacă o poză nu se încarcă, jocul desenează un personaj pixel art în locul ei.
+Personajul fiecărei ture e poza unuia dintre cei 6 membri, aleasă de jucător pe ecranul de nume: Bucur, Bianca, Mădălina, Costi, Andrei, Ovidiu, în această ordine (`characters/<id>.png`, fundal transparent; lista e `characters` din `js/config.js`). Pozele sunt singurele imagini din joc și nu sunt în paleta 8-bit. Dacă o poză nu se încarcă, jocul desenează un personaj pixel art în locul ei.
 
 Dacă înlocuiești o poză: pune noul `characters/<nume>.jpeg` (fundal negru) și rulează `python tools/decupeaza_poze.py` (cere `pip install pillow`), sau pune direct un `characters/<nume>.png` cu fundal transparent. Mărimea personajului și a hitbox-ului: `bird` în `js/config.js`.
 

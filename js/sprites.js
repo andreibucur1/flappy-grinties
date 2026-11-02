@@ -104,12 +104,12 @@ const SPRITES = (function () {
   ];
   // Culoare principală distinctă + 2 pixeli de marcaj pe burtă
   const CHAR_STYLE = {
-    andrei:   { main: 'red',    marks: 'AD' },
+    bucur:    { main: 'red',    marks: 'AD' },
     bianca:   { main: 'pink',   marks: 'BC' },
     madalina: { main: 'lav',    marks: 'AB' },
     costi:    { main: 'blue',   marks: 'CD' },
-    ovidiu:   { main: 'green',  marks: 'AC' },
-    sfarghi:  { main: 'yellow', marks: 'BD' }
+    andrei:   { main: 'yellow', marks: 'BD' },
+    ovidiu:   { main: 'green',  marks: 'AC' }
   };
 
   function charRows(tpl, marks) {

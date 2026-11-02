@@ -13,7 +13,7 @@ import sys
 from PIL import Image, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NAMES = ['andrei', 'bianca', 'madalina', 'costi', 'ovidiu', 'sfarghi']
+NAMES = ['bucur', 'bianca', 'madalina', 'costi', 'andrei', 'ovidiu']
 OUT_H = 220                  # înălțimea PNG-ului final (px)
 DEFAULT_THRESH = 26          # sub acest nivel (max din R,G,B), un pixel legat de margine e fundal
 THRESH = {'madalina': 12}    # păr negru: prag mai mic, ca să nu fie tăiat

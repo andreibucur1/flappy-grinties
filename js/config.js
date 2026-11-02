@@ -23,6 +23,8 @@ const CONFIG = {
   usernameChars: "A-Za-z0-9ĂÂÎȘȚăâîșțŞŢşţ _-", // caracterele permise în username (clasă regex), identic cu lib/validate.js de pe server
   gameOverToAttractMs: 8000,
   storageKey: "grinties_flappy_v1",
+  lastNameKey: "grinties_flappy_last_name_v1",  // ultimul username, ca să nu fie scris din nou la fiecare tură
+  lastCharacterKey: "grinties_flappy_character_v2", // ultimul personaj ales, preselectat pe ecranul de nume (v2: după redenumirea personajelor)
   api: { base: "/api", timeoutMs: 8000 },     // Top 10 comun: POST /api/score, GET /api/top10 (același domeniu cu jocul)
 
   // --- Adăugate la implementare (nu sunt în specificație) ---
@@ -37,14 +39,15 @@ const CONFIG = {
   top10PageMs: 4000,       // Top 10 se arată pe pagini de câte 5 (1-5, 6-10); cât stă fiecare pagină pe ecran
   music: { src: "music/fundal.mp3", volume: 0.4 }, // melodia de fundal, în buclă; volume între 0 și 1
 
-  // Personajul = poza membrului (PNG decupat, fundal transparent, din characters/). Numele NU se afișează jucătorilor;
-  // servesc doar la distingere (jurnalul turelor). `sprite` = placeholder pixel art din js/sprites.js, folosit doar dacă poza nu se încarcă.
+  // Personajul = poza membrului (PNG decupat, fundal transparent, din characters/), ales de jucător pe ecranul de nume,
+  // în ordinea de aici. Numele personajului selectat apare sub rândul de poze.
+  // `sprite` = placeholder pixel art din js/sprites.js, folosit doar dacă poza nu se încarcă.
   characters: [
-    { id: "andrei",   name: "Andrei",   photo: "characters/andrei.png",   sprite: "char_andrei" },
+    { id: "bucur",    name: "Bucur",    photo: "characters/bucur.png",    sprite: "char_bucur" },
     { id: "bianca",   name: "Bianca",   photo: "characters/bianca.png",   sprite: "char_bianca" },
     { id: "madalina", name: "Mădălina", photo: "characters/madalina.png", sprite: "char_madalina" },
     { id: "costi",    name: "Costi",    photo: "characters/costi.png",    sprite: "char_costi" },
-    { id: "ovidiu",   name: "Ovidiu",   photo: "characters/ovidiu.png",   sprite: "char_ovidiu" },
-    { id: "sfarghi",  name: "Sfarghi",  photo: "characters/sfarghi.png",  sprite: "char_sfarghi" }
+    { id: "andrei",   name: "Andrei",   photo: "characters/andrei.png",   sprite: "char_andrei" },
+    { id: "ovidiu",   name: "Ovidiu",   photo: "characters/ovidiu.png",   sprite: "char_ovidiu" }
   ]
 };

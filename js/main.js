@@ -8,23 +8,10 @@
   let state = 'ATTRACT';
   let playerName = '';
   let overAt = 0;
-  let bag = [];
   let lastRoundId = null;  // tura afișată pe GAME_OVER (pentru starea salvării)
   let topSeq = 0;          // doar ultimul răspuns de Top 10 cerut contează
 
   Store.init();
-
-  // Personajul se alege dintr-un „săculeț" amestecat: aleatoriu, dar toți cei 6 apar înainte să se repete cineva
-  function nextCharacter() {
-    if (!bag.length) {
-      bag = CONFIG.characters.slice();
-      for (let i = bag.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        const t = bag[i]; bag[i] = bag[j]; bag[j] = t;
-      }
-    }
-    return bag.pop();
-  }
 
   function setState(s) {
     state = s;
@@ -58,6 +45,14 @@
     });
   }
 
+  // character = personajul ales de jucător pe ecranul de nume
+  function goReady(name, character) {
+    playerName = name;
+    game.reset(character);
+    UI.renderReady(playerName, game.currentMap().name);
+    setState('READY');
+  }
+
   function showResults() {
     UI.renderResults();
     setState('RESULTS');
@@ -84,7 +79,7 @@
     onSpace: function () {
       switch (state) {
         case 'ATTRACT':
-          setState('NAME_ENTRY');
+          setState('NAME_ENTRY'); // câmpul vine precompletat cu numele de data trecută
           break;
         case 'READY':
           game.start();
@@ -106,10 +101,10 @@
     onNameSubmit: function (raw) {
       const v = Store.validateName(raw);
       if (!v.ok) { UI.setNameError(v.error); return; }
-      playerName = v.name;
-      game.reset(nextCharacter());
-      UI.renderReady(playerName, game.currentMap().name);
-      setState('READY');
+      const ch = UI.selectedCharacter();
+      Store.rememberName(v.name);
+      Store.rememberCharacter(ch.id);
+      goReady(v.name, ch);
     },
 
     onToggleResults: function () {

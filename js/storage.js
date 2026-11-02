@@ -133,6 +133,24 @@ const Store = (function () {
              rank: rank, total: sorted.length, attempts: p.attempts };
   }
 
+  // Ultimul username folosit, ca jucătorul să nu-l scrie la fiecare tură. Cheie separată, ca schema de mai sus să rămână neschimbată.
+  function lastName() {
+    try { return localStorage.getItem(CONFIG.lastNameKey) || ''; } catch (e) { return ''; }
+  }
+
+  function rememberName(name) {
+    try { localStorage.setItem(CONFIG.lastNameKey, name); } catch (e) { /* doar nu se mai ține minte */ }
+  }
+
+  // Ultimul personaj ales (id din CONFIG.characters), preselectat pe ecranul de nume
+  function lastCharacter() {
+    try { return localStorage.getItem(CONFIG.lastCharacterKey) || ''; } catch (e) { return ''; }
+  }
+
+  function rememberCharacter(id) {
+    try { localStorage.setItem(CONFIG.lastCharacterKey, id); } catch (e) { /* doar nu se mai ține minte */ }
+  }
+
   const pad2 = function (n) { return String(n).padStart(2, '0'); };
 
   function stamp() {
@@ -195,6 +213,8 @@ const Store = (function () {
     init: init, keyOf: keyOf, validateName: validateName, recordRound: recordRound,
     getSorted: getSorted, getTop: getTop, getBest: getBest, warnings: warnings,
     exportJson: exportJson, exportCsv: exportCsv, reset: reset,
+    lastName: lastName, rememberName: rememberName,
+    lastCharacter: lastCharacter, rememberCharacter: rememberCharacter,
     totalRounds: function () { return data.rounds.length; }
   };
 })();
