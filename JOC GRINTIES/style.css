@@ -4,9 +4,15 @@ html, body {
   background: #000000; /* black din PALETTE */
   overflow: hidden;
   user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior: none;              /* fără „trage ca să reîncarci" pe telefon */
+  -webkit-tap-highlight-color: transparent;
 }
 
+/* Zona sigură (notch, bara de jos) rămâne liberă; ui.js scade padding-ul din spațiul disponibil */
 body {
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -24,6 +30,7 @@ canvas {
 /* Pixel art: mărire fără netezire. Dimensiunea o setează ui.js (factor întreg când se poate). */
 #game {
   image-rendering: pixelated;
+  touch-action: manipulation; /* fără zoom la dublă atingere */
 }
 
 /* Pozele personajelor stau deasupra scenei, pe un strat transparent de aceeași mărime */
@@ -36,15 +43,21 @@ canvas {
   pointer-events: none;
 }
 
-/* Câmpul de username rămâne focusabil, dar invizibil; textul se desenează pe canvas */
+/* Câmpul de username: real și focusabil, dar transparent; ui.js îl așază peste câmpul desenat doar pe ecranul de nume.
+   font-size 16px: sub atât, Safari pe iPhone face zoom la focus. */
 #name-input {
+  display: none;
   position: fixed;
   left: 0;
   top: 0;
   width: 1px;
   height: 1px;
+  box-sizing: border-box;
+  margin: 0;
   padding: 0;
   border: 0;
+  font-size: 16px;
   opacity: 0;
   user-select: text;
+  -webkit-user-select: text;
 }
