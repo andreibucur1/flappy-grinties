@@ -81,7 +81,7 @@ canvas {
 #music-btn:hover svg,
 #music-btn:focus-visible svg { fill: #FFF4E0; }              /* creamLit */
 
-body.playing #music-ui { display: none; }                   /* ascuns în timpul turei (ui.js) */
+body:not(.attract) #music-ui { display: none; }             /* doar pe ecranul de start, cu Top 10 (ui.js) */
 
 #music-ui.muted .waves,
 #music-ui:not(.muted) .mute { display: none; }

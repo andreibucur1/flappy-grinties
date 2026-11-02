@@ -26,7 +26,7 @@ const UI = (function () {
   let dragScroll = false;                  // se trage de bara de derulare
   let resultsLayout = null;                // { trackY, trackH, visible, maxScroll }, calculat la desenare
   const BTN_BACK = { x: 150, y: 5, w: 42, h: 16 };        // ecranul de rezultate (mai înalt: „Î" are accent deasupra)
-  const BTN_START = { x: 75, y: 103, w: 50, h: 13 };      // ecranul de nume, sub personaje (pentru telefon; Enter face același lucru)
+  const BTN_START = { x: 75, y: 99, w: 50, h: 13 };       // ecranul de nume, sub personaje (Space / Enter fac același lucru)
   let pressState = null;                                  // starea în care a început ultimul click / ultima atingere
   const NAME_FIELD = { x: 23, y: 28, w: 154, h: 30 };     // câmpul de pergament; peste el stă <input>-ul real, transparent
   const CHAR_ROW = { x: 30, y: 71, size: 20, gap: 4 };    // ecranul de nume: rândul cu personajele de ales (pătrate de 20 px de artă)
@@ -364,7 +364,7 @@ const UI = (function () {
   }
 
   function drawNameEntry() {
-    panel(8, 3, 184, 144);
+    panel(8, 3, 184, 117);
     text('Cum te cheamă?', W / 2, 10, 'creamLit', 2, 'center');
     // Câmp de pergament, înalt cât să încapă accentele (deasupra) și cozile literelor g j p q y (dedesubt) la scara 2
     const F = NAME_FIELD;
@@ -375,7 +375,7 @@ const UI = (function () {
     const v = input.value;
     if (v) text(v, F.x + 5, F.y + 8, 'horseMane', 2);
     else text('username', F.x + 5, F.y + 8, 'creamShade', 2);
-    if (blink(500)) box(F.x + 5 + (v ? Font.measure(v, 2) + 2 : 0), F.y + 8, 2, 14, 'horseMane');
+    if (document.activeElement === input && blink(500)) box(F.x + 5 + (v ? Font.measure(v, 2) + 2 : 0), F.y + 8, 2, 14, 'horseMane'); // cursor doar cât se scrie
     if (nameError) text(nameError, W / 2, 61, 'capLit', 1, 'center');
 
     // Personajele: chenar auriu dublu = cel ales; pozele se desenează peste, pe stratul de fețe (drawFaces)
@@ -391,11 +391,7 @@ const UI = (function () {
       }
     });
 
-    text(C.characters[charIndex].name, W / 2, 95, 'goldLit', 1, 'center'); // numele personajului ales
-
     button(BTN_START, 'Start');
-    text(hint('Scrie numele și apasă Enter', 'Scrie numele și apasă Start'), W / 2, 120, 'stoneLit', 1, 'center');
-    text(hint('Personajul: click sau săgeți', 'Atinge personajul dorit'), W / 2, 130, 'stoneLit', 1, 'center');
   }
 
   function drawReady(info) {
@@ -549,9 +545,11 @@ const UI = (function () {
     });
   }
 
-  // Pe telefon, focus() apelat din atingere (pointerdown) deschide tastatura; altfel jucătorul atinge câmpul
+  // Câmpul de nume NU se focusează singur: cu numele precompletat, Space pornește direct.
+  // Se focusează la click / atingere pe el sau la prima tastă de scris (onKeyDown).
   function show(state) {
-    document.body.classList.toggle('playing', state === 'PLAYING'); // în timpul turei butonul de muzică dispare (style.css)
+    document.body.classList.toggle('attract', state === 'ATTRACT'); // butonul de muzică e doar pe ecranul cu Top 10 (style.css)
+    if (state !== 'ATTRACT' && typeof Music !== 'undefined') Music.closePanel();
     if (state === 'NAME_ENTRY') {
       input.value = Store.lastName();   // numele de data trecută, gata de modificat
       nameError = '';
@@ -559,15 +557,23 @@ const UI = (function () {
       charIndex = last >= 0 ? last : Math.floor(Math.random() * C.characters.length); // prima dată: unul la întâmplare
       input.style.display = 'block';
       placeInput();
-      input.focus();
-      input.setSelectionRange(input.value.length, input.value.length); // cursorul la final, unde e desenat
+      input.blur();
     } else {
       input.blur();
       input.style.display = 'none';
     }
   }
 
-  function setNameError(msg) { nameError = msg; }
+  // Numele nu e bun: mesaj + focus pe câmp, ca jucătorul să-l poată corecta
+  function setNameError(msg) {
+    nameError = msg;
+    focusName();
+  }
+
+  function focusName() {
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length); // cursorul la final, unde e desenat
+  }
 
   // ---------------------------------------------------------------- input
   function onKeyDown(e) {
@@ -584,10 +590,16 @@ const UI = (function () {
     }
     if (e.ctrlKey || e.altKey || e.metaKey) return;
 
+    const typing = st === 'NAME_ENTRY' && document.activeElement === input;
     if (e.code === 'Space') {
-      if (st === 'NAME_ENTRY') {
+      if (typing) {
         // Space e caracter normal în username, dar un Space ținut apăsat din ecranul anterior nu trebuie să scrie spații
         if (e.repeat) e.preventDefault();
+        return;
+      }
+      if (st === 'NAME_ENTRY') { // câmpul nu e activ: Space = Start, cu numele și personajul afișate
+        e.preventDefault();
+        if (!e.repeat) handlers.onNameSubmit(input.value);
         return;
       }
       e.preventDefault(); // fără scroll
@@ -613,7 +625,10 @@ const UI = (function () {
     if (e.key === 'Enter' && st === 'NAME_ENTRY') {
       e.preventDefault();
       if (!e.repeat) handlers.onNameSubmit(input.value);
+      return;
     }
+    // Câmpul nu e activ și se apasă o literă / Backspace: se activează, iar tasta ajunge în el
+    if (st === 'NAME_ENTRY' && !typing && (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete')) focusName();
   }
 
   // Poziția unui eveniment de pointer, în pixeli de artă
@@ -639,16 +654,6 @@ const UI = (function () {
       if (v !== input.value) input.value = v;
       nameError = '';
     });
-    // Câmpul trebuie să rămână focusat cât timp se introduce numele
-    input.addEventListener('blur', function (e) {
-      if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#music-ui')) return; // sliderul de volum ia focusul
-      if (handlers.getState() === 'NAME_ENTRY') setTimeout(function () { input.focus(); }, 0);
-    });
-    document.addEventListener('mousedown', function (e) {
-      if (e.target === input) return; // click / atingere direct pe câmp: lăsăm browserul să-l focuseze (deschide tastatura)
-      if (e.target.closest && e.target.closest('#music-ui')) return; // butonul și sliderul de muzică trebuie să primească click-ul
-      if (handlers.getState() === 'NAME_ENTRY') { e.preventDefault(); input.focus(); }
-    });
 
     // O atingere sau un click stânga pe canvas = Space (săritură, start, ecranul următor). Butoanele merg prin click.
     canvas.addEventListener('pointerdown', function (e) {
@@ -659,8 +664,10 @@ const UI = (function () {
       const p = toArt(e);
       if (st === 'RESULTS') return;                                   // derularea și „Înapoi" merg prin click
       if (st === 'NAME_ENTRY') {
-        // pe telefon focusul deschide tastatura; cu mouse-ul îl ține handler-ul de mousedown. „Start" merge prin click
-        if (touch) { e.preventDefault(); if (!inside(BTN_START, p) && charAt(p) < 0) input.focus(); }
+        // Pe câmp ajunge doar <input>-ul de deasupra; un click în rest îl dezactivează, ca Space să pornească din nou.
+        // „Start" și personajele merg prin click.
+        if (touch) e.preventDefault();
+        input.blur();
         return;
       }
       e.preventDefault();                                              // fără zoom / selecție

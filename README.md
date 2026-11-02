@@ -88,11 +88,11 @@ turso db shell flappy-grinties "DELETE FROM rounds WHERE username_key = 'numele-
 
 ## Cum se joacă
 
-- **Desktop:** `Space` sau click la start → username + `Enter` (sau butonul **Start**) → `Space` sau click ca să începi → `Space` sau click = săritură.
-- **Telefon:** atinge ecranul la start → scrie numele (tastatura apare la atingerea câmpului) → **Start** sau Enter → atinge ecranul ca să începi și ca să sari.
-- **Numele se ține minte** (în `localStorage`, cheia `grinties_flappy_last_name_v1`): ecranul de nume apare la fiecare tură, dar câmpul vine completat cu numele de data trecută. Ajunge `Enter` / **Start**; un jucător nou îl șterge și scrie altul.
-- **Personajul se alege** pe același ecran, din rândul cu cele 6 poze de sub câmp: click sau atingere pe poză, ori săgețile `←` / `→`. Cel ales are chenar auriu; sub rând apare numele lui; ultimul ales e preselectat data viitoare (cheia `grinties_flappy_character_v2`). Prima dată e preselectat unul la întâmplare.
-- Butonul de muzică dispare cât timp se joacă tura și revine după game over.
+- **Desktop:** `Space` sau click la start → ecranul de nume și personaj → `Space` (sau `Enter`, sau butonul **Start**) → `Space` sau click ca să începi → `Space` sau click = săritură.
+- **Telefon:** atinge ecranul la start → (atinge câmpul dacă vrei alt nume) → **Start** → atinge ecranul ca să începi și ca să sari.
+- **Ecranul de nume și personaj:** câmpul vine completat cu numele de data trecută (`localStorage`, cheia `grinties_flappy_last_name_v1`) și **nu e activ**, deci `Space` pornește direct. Ca să schimbi numele, dai click pe câmp sau începi să scrii; cât scrii, `Space` e spațiu în nume, iar `Enter` pornește. Un click în afara câmpului îl dezactivează din nou.
+- **Personajul se alege** pe același ecran, din rândul cu cele 6 poze de sub câmp: click sau atingere pe poză, ori săgețile `←` / `→`. Cel ales are chenar auriu; ultimul ales e preselectat data viitoare (cheia `grinties_flappy_character_v2`). Prima dată e preselectat unul la întâmplare.
+- Butonul de muzică apare doar pe ecranul de start, cu Top 10.
 
 Marginea de sus nu omoară: personajul doar nu poate urca mai sus. Obstacolele și solul omoară.
 
@@ -119,7 +119,7 @@ Jocul merge și deschis direct din `index.html` (dublu-click, în Chrome, `F11` 
 
 Melodia din `music/fundal.mp3` rulează în buclă, pe tot parcursul jocului. Chrome nu pornește sunetul până nu apeși o tastă sau dai un click în pagină, deci **după ce deschizi jocul apasă o dată orice tastă** (de exemplu `Shift`). `Ctrl+Shift+M` oprește / pornește sunetul.
 
-**Volumul:** butonul cu difuzor din colțul dreapta-jos deschide un slider. Volumul ales se ține minte în browser (`localStorage`, cheia `grinties_flappy_volume_v1`); la 0 sunetul e oprit și iconița apare tăiată. Valoarea de pornire, până alege cineva alta, e `music.volume` din `js/config.js` (între 0 și 1). Pe iPhone, Safari nu lasă pagina să schimbe volumul: acolo sliderul doar oprește sunetul (la 0), restul se reglează din butoanele telefonului.
+**Volumul:** butonul cu difuzor din colțul dreapta-jos al ecranului de start (cel cu Top 10) deschide un slider. Volumul ales se ține minte în browser (`localStorage`, cheia `grinties_flappy_volume_v1`); la 0 sunetul e oprit și iconița apare tăiată. Valoarea de pornire, până alege cineva alta, e `music.volume` din `js/config.js` (între 0 și 1). Pe iPhone, Safari nu lasă pagina să schimbe volumul: acolo sliderul doar oprește sunetul (la 0), restul se reglează din butoanele telefonului.
 
 Ca muzica să pornească singură, fără nicio apăsare, deschide Chrome cu opțiunea `--autoplay-policy=no-user-gesture-required` (din proprietățile comenzii rapide Chrome, la „Țintă").
 

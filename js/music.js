@@ -85,5 +85,5 @@ const Music = (function () {
     if (!panel.hidden && !ui.contains(e.target)) setOpen(false);
   });
 
-  return { audio: audio };
+  return { audio: audio, closePanel: function () { setOpen(false); } };
 })();
