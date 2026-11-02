@@ -91,6 +91,8 @@ turso db shell flappy-grinties "DELETE FROM rounds WHERE username_key = 'numele-
 - **Desktop:** `Space` sau click la start → username + `Enter` (sau butonul **Start**) → `Space` sau click ca să începi → `Space` sau click = săritură.
 - **Telefon:** atinge ecranul la start → scrie numele (tastatura apare la atingerea câmpului) → **Start** sau Enter → atinge ecranul ca să începi și ca să sari.
 - **Numele se ține minte** (în `localStorage`, cheia `grinties_flappy_last_name_v1`): ecranul de nume apare la fiecare tură, dar câmpul vine completat cu numele de data trecută. Ajunge `Enter` / **Start**; un jucător nou îl șterge și scrie altul.
+- **Personajul se alege** pe același ecran, din rândul cu cele 6 poze de sub câmp: click sau atingere pe poză, ori săgețile `←` / `→`. Cel ales are chenar auriu; sub rând apare numele lui; ultimul ales e preselectat data viitoare (cheia `grinties_flappy_character_v2`). Prima dată e preselectat unul la întâmplare.
+- Butonul de muzică dispare cât timp se joacă tura și revine după game over.
 
 Marginea de sus nu omoară: personajul doar nu poate urca mai sus. Obstacolele și solul omoară.
 
@@ -132,7 +134,7 @@ Totul e în `js/config.js`: gravitație, săritură, `gap`/`speed`/`spacing` per
 
 ## Personajele
 
-Personajul fiecărei ture e poza unuia dintre cei 6 membri, aleasă aleatoriu (`characters/<nume>.png`, fundal transparent). Pozele sunt singurele imagini din joc și nu sunt în paleta 8-bit. Dacă o poză nu se încarcă, jocul desenează un personaj pixel art în locul ei.
+Personajul fiecărei ture e poza unuia dintre cei 6 membri, aleasă de jucător pe ecranul de nume: Bucur, Bianca, Mădălina, Costi, Andrei, Ovidiu, în această ordine (`characters/<id>.png`, fundal transparent; lista e `characters` din `js/config.js`). Pozele sunt singurele imagini din joc și nu sunt în paleta 8-bit. Dacă o poză nu se încarcă, jocul desenează un personaj pixel art în locul ei.
 
 Dacă înlocuiești o poză: pune noul `characters/<nume>.jpeg` (fundal negru) și rulează `python tools/decupeaza_poze.py` (cere `pip install pillow`), sau pune direct un `characters/<nume>.png` cu fundal transparent. Mărimea personajului și a hitbox-ului: `bird` în `js/config.js`.
 

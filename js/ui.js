@@ -26,9 +26,11 @@ const UI = (function () {
   let dragScroll = false;                  // se trage de bara de derulare
   let resultsLayout = null;                // { trackY, trackH, visible, maxScroll }, calculat la desenare
   const BTN_BACK = { x: 150, y: 5, w: 42, h: 16 };        // ecranul de rezultate (mai înalt: „Î" are accent deasupra)
-  const BTN_START = { x: 75, y: 93, w: 50, h: 13 };       // ecranul de nume, sub câmp (pentru telefon; Enter face același lucru)
+  const BTN_START = { x: 75, y: 103, w: 50, h: 13 };      // ecranul de nume, sub personaje (pentru telefon; Enter face același lucru)
   let pressState = null;                                  // starea în care a început ultimul click / ultima atingere
-  const NAME_FIELD = { x: 23, y: 50, w: 154, h: 30 };     // câmpul de pergament; peste el stă <input>-ul real, transparent
+  const NAME_FIELD = { x: 23, y: 28, w: 154, h: 30 };     // câmpul de pergament; peste el stă <input>-ul real, transparent
+  const CHAR_ROW = { x: 30, y: 71, size: 20, gap: 4 };    // ecranul de nume: rândul cu personajele de ales (pătrate de 20 px de artă)
+  let charIndex = 0;                                      // personajul selectat pe ecranul de nume (index în CONFIG.characters)
   // top10: rows = null cât timp nu există nici răspuns, nici cache; stale = afișăm cache-ul („neactualizat")
   const data = { top10: { rows: Api.cachedTop10(), stale: false, loading: true }, over: null, saveStatus: null, readyName: '', readyMap: '', results: [] };
   const coarse = window.matchMedia ? window.matchMedia('(pointer: coarse)') : { matches: false }; // telefon / tabletă: „Atinge ecranul" în loc de „Apasă Space"
@@ -132,6 +134,7 @@ const UI = (function () {
   // Personajul = poza membrului, pe stratul transparent, ușor înclinată după viteza verticală
   function drawFaces(game, state, debugOn) {
     fctx.clearRect(0, 0, C.canvas.width, C.canvas.height);
+    if (state === 'NAME_ENTRY') { drawCharacterChoices(); return; }
     if (state !== 'READY' && state !== 'PLAYING') return;
     const ch = game.character;
     if (!ch) return;
@@ -154,6 +157,21 @@ const UI = (function () {
       fctx.lineWidth = PS;
       fctx.strokeRect(b.x - h, b.y - h, 2 * h, 2 * h);
     }
+  }
+
+  // Pozele din rândul de personaje de pe ecranul de nume; cele neselectate apar estompate
+  function drawCharacterChoices() {
+    C.characters.forEach(function (ch, i) {
+      const img = photos[ch.id];
+      if (!img || !img.ok) return;
+      const s = charSlot(i);
+      const inner = (s.w - 2) * PS;                     // 1 pixel de artă margine în interiorul chenarului
+      const r = Math.min(inner / img.naturalWidth, inner / img.naturalHeight);
+      const w = img.naturalWidth * r, h = img.naturalHeight * r;
+      fctx.globalAlpha = i === charIndex ? 1 : 0.5;
+      fctx.drawImage(img, (s.x + s.w / 2) * PS - w / 2, (s.y + s.h / 2) * PS - h / 2, w, h);
+    });
+    fctx.globalAlpha = 1;
   }
 
   function photoReady(ch) {
@@ -334,21 +352,50 @@ const UI = (function () {
     if (blink(600)) text(hint('Apasă Space sau click ca să joci', 'Atinge ecranul ca să joci'), W / 2, 122, 'creamLit', 1, 'center', false, 'nightA');
   }
 
+  // Pătratul personajului i pe ecranul de nume, în pixeli de artă
+  function charSlot(i) {
+    return { x: CHAR_ROW.x + i * (CHAR_ROW.size + CHAR_ROW.gap), y: CHAR_ROW.y, w: CHAR_ROW.size, h: CHAR_ROW.size };
+  }
+
+  // Indexul personajului de sub punctul p, sau -1
+  function charAt(p) {
+    for (let i = 0; i < C.characters.length; i++) if (inside(charSlot(i), p)) return i;
+    return -1;
+  }
+
   function drawNameEntry() {
-    panel(8, 24, 184, 100);
-    text('Cum te cheamă?', W / 2, 32, 'creamLit', 2, 'center');
+    panel(8, 3, 184, 144);
+    text('Cum te cheamă?', W / 2, 10, 'creamLit', 2, 'center');
     // Câmp de pergament, înalt cât să încapă accentele (deasupra) și cozile literelor g j p q y (dedesubt) la scara 2
-    box(23, 50, 154, 30, 'horseMane');
-    box(24, 51, 152, 28, 'creamLit');
-    box(24, 51, 152, 1, 'creamShade'); box(24, 51, 1, 28, 'creamShade');   // umbră interioară
-    box(25, 77, 151, 1, 'cream');
+    const F = NAME_FIELD;
+    box(F.x, F.y, F.w, F.h, 'horseMane');
+    box(F.x + 1, F.y + 1, F.w - 2, F.h - 2, 'creamLit');
+    box(F.x + 1, F.y + 1, F.w - 2, 1, 'creamShade'); box(F.x + 1, F.y + 1, 1, F.h - 2, 'creamShade');   // umbră interioară
+    box(F.x + 2, F.y + F.h - 3, F.w - 3, 1, 'cream');
     const v = input.value;
-    if (v) text(v, 28, 58, 'horseMane', 2);
-    else text('username', 28, 58, 'creamShade', 2);
-    if (blink(500)) box(28 + (v ? Font.measure(v, 2) + 2 : 0), 58, 2, 14, 'horseMane');
-    if (nameError) text(nameError, W / 2, 84, 'capLit', 1, 'center');
+    if (v) text(v, F.x + 5, F.y + 8, 'horseMane', 2);
+    else text('username', F.x + 5, F.y + 8, 'creamShade', 2);
+    if (blink(500)) box(F.x + 5 + (v ? Font.measure(v, 2) + 2 : 0), F.y + 8, 2, 14, 'horseMane');
+    if (nameError) text(nameError, W / 2, 61, 'capLit', 1, 'center');
+
+    // Personajele: chenar auriu dublu = cel ales; pozele se desenează peste, pe stratul de fețe (drawFaces)
+    C.characters.forEach(function (ch, i) {
+      const s = charSlot(i);
+      const sel = i === charIndex;
+      if (sel) box(s.x - 2, s.y - 2, s.w + 4, s.h + 4, 'gold');
+      box(s.x - 1, s.y - 1, s.w + 2, s.h + 2, sel ? 'goldLit' : inside(s, mouse) ? 'horseLit' : 'dirtDark');
+      box(s.x, s.y, s.w, s.h, 'nightA');
+      if (!photoReady(ch)) { // rezerva pixel art, dacă poza nu s-a încărcat
+        const sp = SPRITES.get(ch.sprite + '_down');
+        ctx.drawImage(sp.c, Math.round(s.x + (s.w - sp.w) / 2), Math.round(s.y + (s.h - sp.h) / 2));
+      }
+    });
+
+    text(C.characters[charIndex].name, W / 2, 95, 'goldLit', 1, 'center'); // numele personajului ales
+
     button(BTN_START, 'Start');
-    text(hint('Scrie numele și apasă Enter', 'Scrie numele și apasă Start'), W / 2, 110, 'stoneLit', 1, 'center');
+    text(hint('Scrie numele și apasă Enter', 'Scrie numele și apasă Start'), W / 2, 120, 'stoneLit', 1, 'center');
+    text(hint('Personajul: click sau săgeți', 'Atinge personajul dorit'), W / 2, 130, 'stoneLit', 1, 'center');
   }
 
   function drawReady(info) {
@@ -504,9 +551,12 @@ const UI = (function () {
 
   // Pe telefon, focus() apelat din atingere (pointerdown) deschide tastatura; altfel jucătorul atinge câmpul
   function show(state) {
+    document.body.classList.toggle('playing', state === 'PLAYING'); // în timpul turei butonul de muzică dispare (style.css)
     if (state === 'NAME_ENTRY') {
       input.value = Store.lastName();   // numele de data trecută, gata de modificat
       nameError = '';
+      const last = C.characters.findIndex(function (ch) { return ch.id === Store.lastCharacter(); });
+      charIndex = last >= 0 ? last : Math.floor(Math.random() * C.characters.length); // prima dată: unul la întâmplare
       input.style.display = 'block';
       placeInput();
       input.focus();
@@ -551,6 +601,13 @@ const UI = (function () {
     if (st === 'RESULTS') {
       const step = { ArrowUp: -1, ArrowDown: 1, PageUp: -8, PageDown: 8, Home: -1e6, End: 1e6 }[e.key];
       if (step) { e.preventDefault(); resultsScroll += step; }
+      return;
+    }
+    // Săgețile stânga / dreapta schimbă personajul (cursorul din câmp nu se mută: textul se desenează mereu cu cursorul la final)
+    if (st === 'NAME_ENTRY' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      const n = C.characters.length;
+      charIndex = (charIndex + (e.key === 'ArrowRight' ? 1 : n - 1)) % n;
       return;
     }
     if (e.key === 'Enter' && st === 'NAME_ENTRY') {
@@ -603,7 +660,7 @@ const UI = (function () {
       if (st === 'RESULTS') return;                                   // derularea și „Înapoi" merg prin click
       if (st === 'NAME_ENTRY') {
         // pe telefon focusul deschide tastatura; cu mouse-ul îl ține handler-ul de mousedown. „Start" merge prin click
-        if (touch) { e.preventDefault(); if (!inside(BTN_START, p)) input.focus(); }
+        if (touch) { e.preventDefault(); if (!inside(BTN_START, p) && charAt(p) < 0) input.focus(); }
         return;
       }
       e.preventDefault();                                              // fără zoom / selecție
@@ -618,7 +675,8 @@ const UI = (function () {
     };
     const overButton = function () {
       const st = handlers.getState();
-      return (st === 'RESULTS' && inside(BTN_BACK, mouse)) || (st === 'NAME_ENTRY' && inside(BTN_START, mouse));
+      return (st === 'RESULTS' && inside(BTN_BACK, mouse)) ||
+             (st === 'NAME_ENTRY' && (inside(BTN_START, mouse) || charAt(mouse) >= 0));
     };
     canvas.addEventListener('mousemove', function (e) {
       const p = toArt(e);
@@ -642,6 +700,7 @@ const UI = (function () {
       if (st !== pressState) return;
       if (st === 'RESULTS' && inside(BTN_BACK, p)) handlers.onEscape();
       else if (st === 'NAME_ENTRY' && inside(BTN_START, p)) handlers.onNameSubmit(input.value);
+      else if (st === 'NAME_ENTRY' && charAt(p) >= 0) charIndex = charAt(p);
     });
     window.addEventListener('wheel', function (e) {
       if (handlers.getState() !== 'RESULTS') return;
@@ -655,6 +714,7 @@ const UI = (function () {
     init: init, draw: draw, show: show, setNameError: setNameError,
     renderAttract: renderAttract, renderReady: renderReady,
     renderGameOver: renderGameOver, renderResults: renderResults,
-    setSaveStatus: setSaveStatus, setTop10Loading: setTop10Loading, setTop10: setTop10
+    setSaveStatus: setSaveStatus, setTop10Loading: setTop10Loading, setTop10: setTop10,
+    selectedCharacter: function () { return C.characters[charIndex]; }
   };
 })();
