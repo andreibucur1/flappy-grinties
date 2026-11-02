@@ -28,6 +28,8 @@ const UI = (function () {
   const BTN_RESULTS = { x: 132, y: 135, w: 66, h: 13 };   // ecranul de start
   const BTN_BACK = { x: 150, y: 5, w: 42, h: 16 };        // ecranul de rezultate (mai înalt: „Î" are accent deasupra)
   const BTN_START = { x: 75, y: 93, w: 50, h: 13 };       // ecranul de nume, sub câmp (pentru telefon; Enter face același lucru)
+  const BTN_RENAME = { x: 55, y: 128, w: 90, h: 13 };     // ecranul READY: înapoi la ecranul de nume (numele e ținut minte)
+  let pressState = null;                                  // starea în care a început ultimul click / ultima atingere
   const NAME_FIELD = { x: 23, y: 50, w: 154, h: 30 };     // câmpul de pergament; peste el stă <input>-ul real, transparent
   // top10: rows = null cât timp nu există nici răspuns, nici cache; stale = afișăm cache-ul („neactualizat")
   const data = { top10: { rows: Api.cachedTop10(), stale: false, loading: true }, over: null, saveStatus: null, readyName: '', readyMap: '', results: [] };
@@ -330,7 +332,7 @@ const UI = (function () {
     if (lb.stale) text(lb.stale, 178, 48, 'stoneLit', 1, 'right');
     // pitch 11: coada literelor g j p q y și virgula de la ș/ț coboară 2 pixeli de artă sub linie și nu trebuie să atingă rândul următor
     drawBoard(22, 60, 156, 11, null);
-    if (blink(600)) text(hint('Apasă Space ca să joci', 'Atinge ecranul ca să joci'), W / 2, 122, 'creamLit', 1, 'center', false, 'nightA');
+    if (blink(600)) text(hint('Apasă Space sau click ca să joci', 'Atinge ecranul ca să joci'), W / 2, 122, 'creamLit', 1, 'center', false, 'nightA');
     if (Store.warnings().length) text('! Vezi Rezultate', 4, 139, 'capLit', 1, 'left', false, 'nightA');
     button(BTN_RESULTS, 'Rezultate');
   }
@@ -358,7 +360,8 @@ const UI = (function () {
     const s = Font.fit(info.playerName, 128, 2);
     text(info.playerName, W / 2, 16 + (s === 2 ? 0 : 3), 'goldLit', s, 'center', 'dirtDark');
     text('Harta: ' + data.readyMap, W / 2, 38, 'creamLit', 1, 'center');
-    if (blink(600)) text(hint('Space ca să începi', 'Atinge ecranul ca să începi'), W / 2, 116, 'creamLit', 1, 'center', false, 'nightA');
+    if (blink(600)) text(hint('Space sau click ca să începi', 'Atinge ecranul ca să începi'), W / 2, 116, 'creamLit', 1, 'center', false, 'nightA');
+    button(BTN_RENAME, 'Schimbă numele');
   }
 
   function drawPlaying(game, info) {
@@ -391,7 +394,7 @@ const UI = (function () {
     const label = [lb.page, lb.stale].filter(Boolean).join(', ');
     text('Top 10' + (label ? ' (' + label + ')' : ''), W / 2, 77, 'stoneLit', 1, 'center');
     drawBoard(20, 87, 160, 10, r.res.key);
-    text(hint('Space pentru ecranul de start', 'Atinge ecranul pentru start'), W / 2, 137, 'stoneLit', 1, 'center');
+    text(hint('Space sau click pentru start', 'Atinge ecranul pentru start'), W / 2, 137, 'stoneLit', 1, 'center');
   }
 
   const SAVE_STATUS = {
@@ -506,11 +509,12 @@ const UI = (function () {
   // Pe telefon, focus() apelat din atingere (pointerdown) deschide tastatura; altfel jucătorul atinge câmpul
   function show(state) {
     if (state === 'NAME_ENTRY') {
-      input.value = '';
+      input.value = Store.lastName();   // numele de data trecută, gata de modificat
       nameError = '';
       input.style.display = 'block';
       placeInput();
       input.focus();
+      input.setSelectionRange(input.value.length, input.value.length); // cursorul la final, unde e desenat
     } else {
       input.blur();
       input.style.display = 'none';
@@ -591,18 +595,22 @@ const UI = (function () {
       if (handlers.getState() === 'NAME_ENTRY') { e.preventDefault(); input.focus(); }
     });
 
-    // Telefon: o atingere pe canvas = Space (săritură, start, ecranul următor). Click-ul de mouse NU sare.
+    // O atingere sau un click stânga pe canvas = Space (săritură, start, ecranul următor). Butoanele merg prin click.
     canvas.addEventListener('pointerdown', function (e) {
-      if (e.pointerType !== 'touch') return;
+      const touch = e.pointerType === 'touch';
       const st = handlers.getState();
+      pressState = st;
+      if (!touch && e.button !== 0) return;                            // doar butonul stâng al mouse-ului
       const p = toArt(e);
       if (st === 'RESULTS') return;                                   // derularea și „Înapoi" merg prin click
-      if (st === 'ATTRACT' && inside(BTN_RESULTS, p)) return;          // butonul „Rezultate" merge prin click
-      e.preventDefault();                                              // fără zoom / selecție
+      if (st === 'ATTRACT' && inside(BTN_RESULTS, p)) return;          // „Rezultate" merge prin click
+      if (st === 'READY' && inside(BTN_RENAME, p)) return;             // „Schimbă numele" merge prin click
       if (st === 'NAME_ENTRY') {
-        if (!inside(BTN_START, p)) input.focus();                      // „Start" merge prin click
+        // pe telefon focusul deschide tastatura; cu mouse-ul îl ține handler-ul de mousedown. „Start" merge prin click
+        if (touch) { e.preventDefault(); if (!inside(BTN_START, p)) input.focus(); }
         return;
       }
+      e.preventDefault();                                              // fără zoom / selecție
       handlers.onSpace();
     });
 
@@ -615,7 +623,7 @@ const UI = (function () {
     const overButton = function () {
       const st = handlers.getState();
       return (st === 'ATTRACT' && inside(BTN_RESULTS, mouse)) || (st === 'RESULTS' && inside(BTN_BACK, mouse)) ||
-             (st === 'NAME_ENTRY' && inside(BTN_START, mouse));
+             (st === 'NAME_ENTRY' && inside(BTN_START, mouse)) || (st === 'READY' && inside(BTN_RENAME, mouse));
     };
     canvas.addEventListener('mousemove', function (e) {
       const p = toArt(e);
@@ -635,9 +643,12 @@ const UI = (function () {
     canvas.addEventListener('click', function (e) {
       const p = toArt(e);
       const st = handlers.getState();
+      // Un click care tocmai a schimbat ecranul (pointerdown = Space) nu apasă și un buton de pe ecranul nou
+      if (st !== pressState) return;
       if (st === 'ATTRACT' && inside(BTN_RESULTS, p)) handlers.onToggleResults();
       else if (st === 'RESULTS' && inside(BTN_BACK, p)) handlers.onEscape();
       else if (st === 'NAME_ENTRY' && inside(BTN_START, p)) handlers.onNameSubmit(input.value);
+      else if (st === 'READY' && inside(BTN_RENAME, p)) handlers.onChangeName();
     });
     window.addEventListener('wheel', function (e) {
       if (handlers.getState() !== 'RESULTS') return;

@@ -88,8 +88,9 @@ turso db shell flappy-grinties "DELETE FROM rounds WHERE username_key = 'numele-
 
 ## Cum se joacă
 
-- **Desktop:** `Space` la start → username + `Enter` (sau butonul **Start**) → `Space` ca să începi → `Space` = săritură. Click-ul de mouse nu sare.
+- **Desktop:** `Space` sau click la start → username + `Enter` (sau butonul **Start**) → `Space` sau click ca să începi → `Space` sau click = săritură.
 - **Telefon:** atinge ecranul la start → scrie numele (tastatura apare la atingerea câmpului) → **Start** sau Enter → atinge ecranul ca să începi și ca să sari.
+- **Numele se ține minte** (în `localStorage`, cheia `grinties_flappy_last_name_v1`): de la a doua tură, start-ul duce direct la ecranul „gata de joc", fără să mai scrii numele. Butonul **Schimbă numele** de pe acel ecran deschide câmpul, precompletat cu numele curent. La stand, unde joacă mai mulți pe același calculator, fiecare jucător nou apasă **Schimbă numele**.
 
 Marginea de sus nu omoară: personajul doar nu poate urca mai sus. Obstacolele și solul omoară.
 

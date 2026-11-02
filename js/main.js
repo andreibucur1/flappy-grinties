@@ -58,6 +58,13 @@
     });
   }
 
+  function goReady(name) {
+    playerName = name;
+    game.reset(nextCharacter());
+    UI.renderReady(playerName, game.currentMap().name);
+    setState('READY');
+  }
+
   function showResults() {
     UI.renderResults();
     setState('RESULTS');
@@ -83,9 +90,13 @@
 
     onSpace: function () {
       switch (state) {
-        case 'ATTRACT':
-          setState('NAME_ENTRY');
+        case 'ATTRACT': {
+          // Numele ținut minte de data trecută: direct la READY, fără să-l mai scrii (se poate schimba din READY)
+          const v = Store.validateName(Store.lastName());
+          if (v.ok) goReady(v.name);
+          else setState('NAME_ENTRY');
           break;
+        }
         case 'READY':
           game.start();
           setState('PLAYING');
@@ -106,10 +117,12 @@
     onNameSubmit: function (raw) {
       const v = Store.validateName(raw);
       if (!v.ok) { UI.setNameError(v.error); return; }
-      playerName = v.name;
-      game.reset(nextCharacter());
-      UI.renderReady(playerName, game.currentMap().name);
-      setState('READY');
+      Store.rememberName(v.name);
+      goReady(v.name);
+    },
+
+    onChangeName: function () {
+      if (state === 'READY') setState('NAME_ENTRY');
     },
 
     onToggleResults: function () {

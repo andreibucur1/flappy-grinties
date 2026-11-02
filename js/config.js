@@ -23,6 +23,7 @@ const CONFIG = {
   usernameChars: "A-Za-z0-9ĂÂÎȘȚăâîșțŞŢşţ _-", // caracterele permise în username (clasă regex), identic cu lib/validate.js de pe server
   gameOverToAttractMs: 8000,
   storageKey: "grinties_flappy_v1",
+  lastNameKey: "grinties_flappy_last_name_v1",  // ultimul username, ca să nu fie scris din nou la fiecare tură
   api: { base: "/api", timeoutMs: 8000 },     // Top 10 comun: POST /api/score, GET /api/top10 (același domeniu cu jocul)
 
   // --- Adăugate la implementare (nu sunt în specificație) ---
