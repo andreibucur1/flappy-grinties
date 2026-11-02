@@ -20,8 +20,10 @@ const CONFIG = {
   // spacing = distanța orizontală dintre centrele obstacolelor (px). speed = viteza de deplasare (px/s).
   gapCenterMargin: 80,     // centrul spațiului nu se generează mai aproape de 80 px de margini
   usernameMaxLength: 12,
+  usernameChars: "A-Za-z0-9ĂÂÎȘȚăâîșțŞŢşţ _-", // caracterele permise în username (clasă regex), identic cu lib/validate.js de pe server
   gameOverToAttractMs: 8000,
   storageKey: "grinties_flappy_v1",
+  api: { base: "/api", timeoutMs: 8000 },     // Top 10 comun: POST /api/score, GET /api/top10 (același domeniu cu jocul)
 
   // --- Adăugate la implementare (nu sunt în specificație) ---
   minGapShift: 80,         // diferența minimă (px) între centrele a două spații consecutive (poziția e aleatorie, dar nu aproape de cea anterioară)

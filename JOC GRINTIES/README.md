@@ -1,23 +1,109 @@
-# Flappy Grințieș: cum se pornește la stand
+# Flappy Grințieș
 
-## Pornire
+Jocul rulează online, pe un link public Vercel, și are un **Top 10 comun** pentru toți jucătorii, păstrat într-o bază Turso (SQLite găzduit).
 
-1. Deschide **Chrome**.
-2. Dublu-click pe `index.html`, **mereu din același folder**.
-3. `F11` pentru ecran complet. Jocul se scalează singur la fereastră (cu factor întreg când se poate, ca pixelii să rămână egali).
-4. Lasă fereastra deschisă tot evenimentul. După fiecare tură jocul revine singur la ecranul de start.
+```
+browser (telefon / laptop) ──https──► Vercel
+                                       ├─ index.html, js/, style.css   (jocul, fișiere statice)
+                                       ├─ /api/score  (POST)  ─┐
+                                       └─ /api/top10  (GET)   ─┴─► Turso, tabelul rounds
+```
 
-> **Important:** scorurile sunt salvate în `localStorage`, legat de originea paginii. Dacă deschizi jocul din alt folder, alt browser sau printr-un server local (Live Server etc.), scorurile vechi nu se pierd, dar nu apar în acea instanță.
+Secretele Turso (URL și token) stau doar în variabilele de mediu Vercel și în `.env.local` (ignorat de git), niciodată în codul din browser.
+
+## Structura
+
+| Cale | Ce conține |
+|---|---|
+| `index.html`, `style.css`, `js/` | Jocul (scripturi clasice, fără framework). `js/api.js` vorbește cu serverul și ține coada de ture netrimise. |
+| `api/score.js`, `api/top10.js` | Vercel Functions (Node.js). |
+| `lib/` | Validare, interogarea Top 10, inserare, clientul libsql. Fără cod de rețea în `validate.js`. |
+| `db/schema.sql` | Schema bazei de date. |
+| `scripts/migrate.mjs` | Aplică schema (`npm run db:migrate`). |
+| `tests/` | Teste automate (`npm test`), pe o bază SQLite locală temporară, fără rețea. |
+
+## Configurare (o singură dată, din terminalul VS Code)
+
+Cerințe: **Node.js ≥ 20.12** (scriptul de migrare citește singur `.env.local` cu `process.loadEnvFile`), un cont Vercel și un cont Turso. Toate comenzile se rulează **din folderul `JOC GRINTIES`** (acolo e `package.json`).
+
+```bash
+# 1. Turso CLI. Pe Windows merge doar prin WSL: în PowerShell rulezi `wsl`, apoi în shellul WSL:
+curl -sSfL https://get.tur.so/install.sh | bash      # macOS: brew install tursodatabase/tap/turso
+turso auth login
+turso db create flappy-grinties
+turso db show flappy-grinties --url          # → TURSO_DATABASE_URL (libsql://...)
+turso db tokens create flappy-grinties        # → TURSO_AUTH_TOKEN
+
+# 2. Vercel CLI
+npm i -g vercel
+vercel login
+vercel link                                   # leagă folderul de un proiect Vercel
+vercel env add TURSO_DATABASE_URL             # lipește URL-ul (fără argument de mediu = toate mediile)
+vercel env add TURSO_AUTH_TOKEN               # lipește token-ul
+vercel env pull .env.local                    # aduce variabilele mediului Development, pentru migrare
+
+# 3. Dependențe, schema, teste
+npm install
+npm run db:migrate                            # citește singur .env.local; se poate rula de oricâte ori
+npm test
+
+# 4. Rulare locală (joc + API pe același port)
+vercel dev                                    # → http://localhost:3000
+
+# 5. Publicare
+vercel --prod                                 # → https://<proiect>.vercel.app
+```
+
+Note despre comenzi (verificate pe 2 noiembrie 2026 în documentația oficială vercel.com/docs și docs.turso.tech):
+
+- `vercel env add` salvează variabilele ca **Secret** în Production și Preview, și ca **Config** în Development. Valorile Secret nu se mai pot citi după creare, dar `vercel env pull` aduce implicit mediul Development, deci `.env.local` primește valorile reale.
+- Dacă proiectul Vercel e legat de repo-ul GitHub (deploy automat la push), în setările proiectului **Root Directory** trebuie să fie `JOC GRINTIES`.
+- **Fără Turso, local:** `TURSO_DATABASE_URL=file:local.db` (fără token) funcționează cu același cod; `*.db` e ignorat de git.
+
+### Verificare rapidă cu `curl` (cu `vercel dev` pornit)
+
+```bash
+curl -s -X POST localhost:3000/api/score -H "Content-Type: application/json" \
+  -d '{"roundId":"test-0001","username":"Test","score":5,"map":"Grințieșu Mic"}'
+curl -s localhost:3000/api/top10
+curl -s -o /dev/null -w "%{http_code}\n" localhost:3000/api/score     # → 405
+```
+
+Pe Windows (Git Bash, PowerShell) diacriticele scrise direct în linia de comandă pot ajunge stricate la server (`map_invalid`). Pune corpul într-un fișier salvat UTF-8 și trimite-l cu `--data-binary @corp.json`.
+
+### Moderare
+
+Ștergerea unui username nepotrivit, tot din terminal:
+
+```bash
+turso db shell flappy-grinties "DELETE FROM rounds WHERE username_key = 'numele-in-litere-mici';"
+```
+
+## Cum funcționează salvarea
+
+- La game over tura (`roundId` unic, username, scor, hartă) intră întâi în coada `localStorage["grinties_flappy_pending_v1"]`, apoi se trimite. Pe ecran apare „Se salvează…", apoi „Scor salvat", „Fără conexiune — scorul se trimite automat mai târziu" sau „Scor respins".
+- Coada se golește în ordine la game over, la încărcarea paginii și când revine conexiunea. Serverul e idempotent: aceeași tură trimisă de două ori apare o singură dată în bază.
+- Top 10 se încarcă la ecranul de start și după fiecare salvare reușită. Dacă serverul nu răspunde, se afișează ultimul Top 10 primit, cu mențiunea „neactualizat".
+- Username: 1–12 caractere, litere (inclusiv ă â î ș ț), cifre, spațiu, `-` și `_`, fără `-` la început. Scor între 0 și 1000 (`MAX_SCORE` în `lib/validate.js`).
 
 ## Cum se joacă
 
-`Space` la start → username + `Enter` → `Space` ca să începi → `Space` = săritură. Marginea de sus nu omoară: personajul doar nu poate urca mai sus. Obstacolele și solul omoară.
+- **Desktop:** `Space` la start → username + `Enter` (sau butonul **Start**) → `Space` ca să începi → `Space` = săritură. Click-ul de mouse nu sare.
+- **Telefon:** atinge ecranul la start → scrie numele (tastatura apare la atingerea câmpului) → **Start** sau Enter → atinge ecranul ca să începi și ca să sari.
+
+Marginea de sus nu omoară: personajul doar nu poate urca mai sus. Obstacolele și solul omoară.
+
+## Pornire la stand, fără internet
+
+Jocul merge și deschis direct din `index.html` (dublu-click, în Chrome, `F11` pentru ecran complet), dar atunci nu are server: Top 10 comun apare „Clasament indisponibil", iar turele jucate așa **nu ajung niciodată în baza de date** (coada lor e legată de pagina deschisă din fișier). Recordul personal, ecranul **Rezultate** și exportul CSV/JSON merg pe datele locale. Pentru clasamentul comun, deschide link-ul Vercel; dacă internetul cade în timpul evenimentului, turele se păstrează în coadă și se trimit singure când revine conexiunea.
+
+> **Important:** datele locale (`localStorage`) sunt legate de originea paginii. Jocul deschis din fișier, de pe `localhost` și de pe link-ul Vercel are trei seturi separate de date locale.
 
 ## Scurtături de organizator (nu apar pe ecran)
 
 | Scurtătură | Ce face |
 |---|---|
-| `Ctrl+Shift+R` | Ecranul cu toți jucătorii (din ecranul de start sau de game over). Încă o dată = ieșire. Același ecran se deschide și din butonul **Rezultate** (colțul din dreapta jos al ecranului de start); **Înapoi** sau `Esc` revin. |
+| `Ctrl+Shift+R` | Ecranul cu toți jucătorii **din datele locale ale acestui browser** (clasamentul complet e în baza de date), din ecranul de start sau de game over. Încă o dată = ieșire. Același ecran se deschide și din butonul **Rezultate** (colțul din dreapta jos al ecranului de start); **Înapoi** sau `Esc` revin. |
 | Derulare în rezultate | Roata mouse-ului, bara aurie din dreapta (click sau tragere), `Sus`/`Jos`, `PageUp`/`PageDown`, `Home`/`End`. |
 | `Esc` | Ieșire din rezultate; anulează introducerea numelui |
 | `Ctrl+Shift+E` | Export **CSV** cu clasamentul complet (loc, jucător, record, hartă, ture, ultima tură, data recordului). Se deschide direct în Excel, cu diacritice corecte. **Fă-l periodic și la final.** |

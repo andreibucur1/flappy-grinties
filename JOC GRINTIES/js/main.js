@@ -9,6 +9,8 @@
   let playerName = '';
   let overAt = 0;
   let bag = [];
+  let lastRoundId = null;  // tura afișată pe GAME_OVER (pentru starea salvării)
+  let topSeq = 0;          // doar ultimul răspuns de Top 10 cerut contează
 
   Store.init();
 
@@ -33,6 +35,27 @@
     game.reset(null);
     UI.renderAttract();
     setState('ATTRACT');
+    loadTop10();
+  }
+
+  // Top 10 comun, de pe server; dacă cererea eșuează, UI-ul arată cache-ul („neactualizat")
+  function loadTop10() {
+    const seq = ++topSeq;
+    UI.setTop10Loading();
+    Api.loadTop10().then(function (r) {
+      if (seq === topSeq) UI.setTop10(r.rows, r.stale);
+    });
+  }
+
+  // Golește coada de ture; actualizează starea salvării de pe GAME_OVER și Top 10-ul dacă s-a salvat ceva
+  function syncScores() {
+    Api.flushQueue().then(function (saved) {
+      if (state === 'GAME_OVER' && lastRoundId) {
+        const st = Api.roundStatus(lastRoundId);
+        UI.setSaveStatus(st === 'saved' ? 'saved' : st === 'rejected' ? 'rejected' : 'offline');
+      }
+      if (saved > 0) loadTop10();
+    });
   }
 
   function showResults() {
@@ -46,6 +69,13 @@
     UI.renderGameOver(res, game.score, mapName);
     overAt = performance.now();
     setState('GAME_OVER');
+
+    // Tura intră în coadă înainte de trimitere; local rămâne și în Store (record personal, export)
+    const round = { roundId: Api.newRoundId(), username: playerName, score: game.score, map: mapName };
+    Api.queueRound(round);
+    lastRoundId = round.roundId;
+    UI.setSaveStatus('saving');
+    syncScores();
   }
 
   UI.init({
@@ -105,6 +135,8 @@
   });
 
   goAttract();
+  syncScores();                                   // ture rămase netrimise de data trecută
+  window.addEventListener('online', syncScores);  // revine conexiunea: se trimite coada
 
   // Pas fix de simulare: același rezultat la 60, 120 sau 144 Hz
   let last = performance.now();
