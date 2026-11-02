@@ -72,12 +72,15 @@ const Store = (function () {
     return w;
   }
 
-  // { ok, name, error }
+  // { ok, name, error }. Aceleași reguli ca serverul (lib/validate.js), altfel scorul ar fi respins la salvare
+  const NAME_RE = new RegExp('^[' + CONFIG.usernameChars + ']+$');
+
   function validateName(raw) {
-    const name = String(raw).trim();
+    const name = String(raw).normalize('NFC').trim();
     if (name.length < 1) return { ok: false, error: 'Scrie un username.' };
     if (name.length > CONFIG.usernameMaxLength) return { ok: false, error: 'Maximum ' + CONFIG.usernameMaxLength + ' caractere.' };
-    if (!/^[\p{L}\p{N} _-]+$/u.test(name)) return { ok: false, error: 'Doar litere, cifre, spațiu, - și _.' };
+    if (!NAME_RE.test(name)) return { ok: false, error: 'Doar litere, cifre, spațiu, - și _.' };
+    if (name[0] === '-') return { ok: false, error: 'Nu poate începe cu -.' };
     return { ok: true, name: name };
   }
 

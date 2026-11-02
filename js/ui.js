@@ -27,7 +27,11 @@ const UI = (function () {
   let resultsLayout = null;                // { trackY, trackH, visible, maxScroll }, calculat la desenare
   const BTN_RESULTS = { x: 132, y: 135, w: 66, h: 13 };   // ecranul de start
   const BTN_BACK = { x: 150, y: 5, w: 42, h: 16 };        // ecranul de rezultate (mai înalt: „Î" are accent deasupra)
-  const data = { top: [], over: null, readyName: '', readyMap: '', results: [] };
+  const BTN_START = { x: 75, y: 93, w: 50, h: 13 };       // ecranul de nume, sub câmp (pentru telefon; Enter face același lucru)
+  const NAME_FIELD = { x: 23, y: 50, w: 154, h: 30 };     // câmpul de pergament; peste el stă <input>-ul real, transparent
+  // top10: rows = null cât timp nu există nici răspuns, nici cache; stale = afișăm cache-ul („neactualizat")
+  const data = { top10: { rows: Api.cachedTop10(), stale: false, loading: true }, over: null, saveStatus: null, readyName: '', readyMap: '', results: [] };
+  const coarse = window.matchMedia ? window.matchMedia('(pointer: coarse)') : { matches: false }; // telefon / tabletă: „Atinge ecranul" în loc de „Apasă Space"
 
   // ---------------------------------------------------------------- unelte
   function box(x, y, w, h, color) {
@@ -81,13 +85,30 @@ const UI = (function () {
   }
 
   // ---------------------------------------------------------------- scalare
-  // Factor întreg când se poate, ca pixelii să fie la fel de mari peste tot
+  // Factor întreg când se poate, ca pixelii să fie la fel de mari peste tot. Raportul 4:3 rămâne, cu benzi negre (letterbox),
+  // în portrait și în landscape; zona sigură a telefonului (notch) e scoasă din spațiul disponibil prin padding-ul din style.css.
   function resize() {
-    const fit = Math.min(window.innerWidth / W, window.innerHeight / H);
-    const s = fit >= 1 ? Math.floor(fit) : fit;
+    const cs = getComputedStyle(document.body);
+    const availW = window.innerWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const availH = window.innerHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const fit = Math.min(availW / W, availH / H);
+    // Pe telefon (ecran mic, densitate mare) factorul întreg ar pierde mult spațiu (375 px lățime → 1x), deci se umple tot
+    const s = fit >= 1 && !coarse.matches ? Math.floor(fit) : fit;
     const w = Math.round(W * s) + 'px', h = Math.round(H * s) + 'px';
     canvas.style.width = w; canvas.style.height = h;
     stage.style.width = w; stage.style.height = h;
+    placeInput();
+  }
+
+  // <input>-ul real stă exact peste câmpul desenat, ca pe telefon o atingere pe câmp să deschidă tastatura.
+  // E transparent: textul se desenează pe canvas cu fontul bitmap.
+  function placeInput() {
+    const r = canvas.getBoundingClientRect();
+    const k = r.width / W;
+    input.style.left = (r.left + NAME_FIELD.x * k) + 'px';
+    input.style.top = (r.top + NAME_FIELD.y * k) + 'px';
+    input.style.width = (NAME_FIELD.w * k) + 'px';
+    input.style.height = (NAME_FIELD.h * k) + 'px';
   }
 
   function loadPhotos() {
@@ -222,23 +243,59 @@ const UI = (function () {
   // ---------------------------------------------------------------- clasament
   const RANK_COLORS = ['goldLit', 'stoneLit', 'horseLit']; // aur, argint, bronz
 
-  function drawBoard(rows, x, y, w, pitch, scale, highlightKey) {
-    if (!rows.length) {
-      text('Niciun scor încă. Fii primul!', x + w / 2, y + Math.round((pitch - 7) / 2), 'creamLit', 1, 'center');
+  // Top 10 comun: o singură coloană pe toată lățimea, ca numele de 12 caractere să încapă întregi.
+  // Pe ecran încap 5 rânduri, deci locurile 1-5 și 6-10 alternează (CONFIG.top10PageMs).
+  // Pe game over se începe cu pagina pe care e jucătorul curent (highlightKey); rândul lui e evidențiat.
+  const PAGE = 5;
+  let boardStart = 0;   // de când se numără paginile (intrarea pe ecran)
+
+  // { rows, page, pages } pentru momentul curent; rows = null / [] când nu e nimic de afișat
+  function boardPage(highlightKey) {
+    const rows = data.top10.rows ? data.top10.rows.slice(0, 10) : data.top10.rows;
+    const pages = rows ? Math.max(1, Math.ceil(rows.length / PAGE)) : 1;
+    let first = 0;
+    if (highlightKey && rows) {
+      const i = rows.findIndex(function (p) { return p.key === highlightKey; });
+      if (i >= 0) first = Math.floor(i / PAGE);
+    }
+    const page = (first + Math.floor((performance.now() - boardStart) / C.top10PageMs)) % pages;
+    return { rows: rows, page: page, pages: pages };
+  }
+
+  // Ce se scrie lângă titlul „Top 10": pagina („1-5" / „6-10", '' dacă e o singură pagină) și „neactualizat" dacă e cache-ul
+  function boardLabels(highlightKey) {
+    const b = boardPage(highlightKey);
+    return { page: b.pages > 1 ? (b.page === 0 ? '1-5' : '6-10') : '', stale: data.top10.stale ? 'neactualizat' : '' };
+  }
+
+  // x = marginea stângă; w = lățimea tabelului
+  function drawBoard(x, y, w, pitch, highlightKey) {
+    const t = data.top10;
+    const b = boardPage(highlightKey);
+    const midY = y + 2 * pitch;
+    if (!b.rows) {
+      text(t.loading ? 'Se încarcă…' : 'Clasament indisponibil', x + w / 2, midY, 'creamLit', 1, 'center');
       return;
     }
-    rows.forEach(function (p, i) {
+    if (!b.rows.length) {
+      text('Niciun scor încă. Fii primul!', x + w / 2, midY, 'creamLit', 1, 'center');
+      return;
+    }
+    b.rows.slice(b.page * PAGE, b.page * PAGE + PAGE).forEach(function (p, i) {
       const ry = y + i * pitch;
-      const score = String(p.best);
-      if (p.key === highlightKey) box(x - 2, ry - 2, w + 4, 7 * scale + 4, 'mtnNightLit');
-      text(String(i + 1), x, ry, RANK_COLORS[i] || 'creamLit', scale);
-      text(score, x + w, ry, 'goldLit', scale, 'right');
-      const nameX = x + 8 * scale;
-      const avail = w - 8 * scale - Font.measure(score, scale) - 4 * scale;
-      const s2 = Font.fit(p.displayName, avail, scale);
-      const nm = Font.clip(p.displayName, avail, s2);
-      text(nm, nameX, ry + Math.round((7 * scale - 7 * s2) / 2), 'creamLit', s2);
+      const rank = p.rank || b.page * PAGE + i + 1;
+      const score = String(p.score);
+      if (highlightKey && p.key === highlightKey) box(x - 2, ry - 2, w + 4, 11, 'mtnNightLit');
+      text(String(rank), x + 11, ry, RANK_COLORS[rank - 1] || 'creamLit', 1, 'right');
+      text(score, x + w, ry, 'goldLit', 1, 'right');
+      const avail = w - 16 - Font.measure(score, 1) - 4; // 12 caractere încap mereu; clip doar ca plasă de siguranță
+      text(Font.clip(p.name, avail, 1), x + 16, ry, 'creamLit', 1);
     });
+  }
+
+  // Textele de instrucțiuni: tastatură pe desktop, atingere pe telefon
+  function hint(desktop, touch) {
+    return coarse.matches ? touch : desktop;
   }
 
   // ---------------------------------------------------------------- ecrane
@@ -266,10 +323,14 @@ const UI = (function () {
     const ts = Font.fit(title, W - 10, 2);
     text(title, W / 2, 9, 'goldLit', ts, 'center', 'dirtDark', 'dirtDark');
     panel(10, 31, 180, 87);
-    text('Top 3', W / 2, 37, 'creamLit', 2, 'center');
-    // pitch 18 la scara 2: coada literelor g j p q y coboară 4 pixeli de artă sub linie și nu trebuie să atingă rândul următor
-    drawBoard(data.top, 22, 57, 156, 18, 2, null);
-    if (blink(600)) text('Apasă Space ca să joci', W / 2, 122, 'creamLit', 1, 'center', false, 'nightA');
+    // Titlul în stânga, pagina și „neactualizat" în dreapta (sub titlu nu e loc: coada lui „p" coboară până la rândul 55)
+    text('Top 10', 22, 37, 'creamLit', 2);
+    const lb = boardLabels(null);
+    if (lb.page) text(lb.page, 178, 39, 'stoneLit', 1, 'right');
+    if (lb.stale) text(lb.stale, 178, 48, 'stoneLit', 1, 'right');
+    // pitch 11: coada literelor g j p q y și virgula de la ș/ț coboară 2 pixeli de artă sub linie și nu trebuie să atingă rândul următor
+    drawBoard(22, 60, 156, 11, null);
+    if (blink(600)) text(hint('Apasă Space ca să joci', 'Atinge ecranul ca să joci'), W / 2, 122, 'creamLit', 1, 'center', false, 'nightA');
     if (Store.warnings().length) text('! Vezi Rezultate', 4, 139, 'capLit', 1, 'left', false, 'nightA');
     button(BTN_RESULTS, 'Rezultate');
   }
@@ -286,8 +347,9 @@ const UI = (function () {
     if (v) text(v, 28, 58, 'horseMane', 2);
     else text('username', 28, 58, 'creamShade', 2);
     if (blink(500)) box(28 + (v ? Font.measure(v, 2) + 2 : 0), 58, 2, 14, 'horseMane');
-    if (nameError) text(nameError, W / 2, 86, 'capLit', 1, 'center');
-    text('Scrie numele și apasă Enter', W / 2, 106, 'stoneLit', 1, 'center');
+    if (nameError) text(nameError, W / 2, 84, 'capLit', 1, 'center');
+    button(BTN_START, 'Start');
+    text(hint('Scrie numele și apasă Enter', 'Scrie numele și apasă Start'), W / 2, 110, 'stoneLit', 1, 'center');
   }
 
   function drawReady(info) {
@@ -296,7 +358,7 @@ const UI = (function () {
     const s = Font.fit(info.playerName, 128, 2);
     text(info.playerName, W / 2, 16 + (s === 2 ? 0 : 3), 'goldLit', s, 'center', 'dirtDark');
     text('Harta: ' + data.readyMap, W / 2, 38, 'creamLit', 1, 'center');
-    if (blink(600)) text('Space ca să începi', W / 2, 116, 'creamLit', 1, 'center', false, 'nightA');
+    if (blink(600)) text(hint('Space ca să începi', 'Atinge ecranul ca să începi'), W / 2, 116, 'creamLit', 1, 'center', false, 'nightA');
   }
 
   function drawPlaying(game, info) {
@@ -312,17 +374,32 @@ const UI = (function () {
     const r = data.over;
     if (!r) return;
     panel(6, 1, 188, 147);
-    text('Game over', W / 2, 8, 'capLit', 2, 'center', 'capDeep');
-    text('Scor ' + r.score, W / 2, 26, 'goldLit', 2, 'center', 'dirtDark');
-    if (r.res.isRecord && blink(400)) text('Record nou!', W / 2, 44, 'grassLit', 1, 'center');
-    text('Hartă atinsă: ' + r.mapName, W / 2, 55, 'creamLit', 1, 'center');
-    const best = Font.clip('Recordul tău (' + r.res.displayName + '): ' + r.res.best, 172, 1);
-    text(best, W / 2, 66, 'creamLit', 1, 'center');
-    text('Locul ' + r.res.rank + ' din ' + r.res.total, W / 2, 77, 'creamLit', 1, 'center');
-    text('Top 3', W / 2, 90, 'stoneLit', 1, 'center');
-    drawBoard(data.top, 20, 101, 160, 11, 1, r.res.key);
-    text('Space pentru ecranul de start', W / 2, 135, 'stoneLit', 1, 'center');
+    text('Game over', W / 2, 6, 'capLit', 2, 'center', 'capDeep');
+    text('Scor ' + r.score, W / 2, 22, 'goldLit', 2, 'center', 'dirtDark');
+    text('Hartă atinsă: ' + r.mapName, W / 2, 38, 'creamLit', 1, 'center');
+    // Recordul personal vine din datele locale (Store)
+    if (r.res.isRecord) {
+      if (blink(400)) text('Record nou!', W / 2, 48, 'grassLit', 1, 'center');
+    } else {
+      // Numele nu se taie: dacă nu încape întreg pe rând, rândul rămâne fără el
+      const withName = 'Recordul tău (' + r.res.displayName + '): ' + r.res.best;
+      text(Font.measure(withName, 1) <= 176 ? withName : 'Recordul tău: ' + r.res.best, W / 2, 48, 'creamLit', 1, 'center');
+    }
+    const st = SAVE_STATUS[data.saveStatus];
+    if (st) Font.wrap(st.text, 29).forEach(function (l, i) { text(l, W / 2, 57 + i * 10, st.color, 1, 'center'); });
+    const lb = boardLabels(r.res.key);
+    const label = [lb.page, lb.stale].filter(Boolean).join(', ');
+    text('Top 10' + (label ? ' (' + label + ')' : ''), W / 2, 77, 'stoneLit', 1, 'center');
+    drawBoard(20, 87, 160, 10, r.res.key);
+    text(hint('Space pentru ecranul de start', 'Atinge ecranul pentru start'), W / 2, 137, 'stoneLit', 1, 'center');
   }
+
+  const SAVE_STATUS = {
+    saving: { text: 'Se salvează…', color: 'creamLit' },
+    saved: { text: 'Scor salvat', color: 'grassLit' },
+    offline: { text: 'Fără conexiune — scorul se trimite automat mai târziu', color: 'capLit' },
+    rejected: { text: 'Scor respins', color: 'capLit' }
+  };
 
   function wrapped(messages) {
     const lines = [];
@@ -338,6 +415,7 @@ const UI = (function () {
     text('Rezultate', W / 2 - 10, 6, 'goldLit', 2, 'center', 'dirtDark');
     const warn = wrapped(Store.warnings());
     let y = 25;
+    wrapped(['Date locale — clasamentul complet e în baza de date']).forEach(function (l) { text(l, 8, y, 'stoneLit', 1); y += 9; });
     warn.forEach(function (l) { text(l, 8, y, 'capLit', 1); y += 9; });
     text('#', 8, y, 'stoneLit', 1);
     text('Jucător', 22, y, 'stoneLit', 1);
@@ -391,13 +469,30 @@ const UI = (function () {
   }
 
   // ---------------------------------------------------------------- date pentru ecrane (apelate din main.js la schimbarea stării)
-  function renderAttract() { data.top = Store.getTop(3); }
+  function renderAttract() { data.saveStatus = null; boardStart = performance.now(); }
 
   function renderReady(playerName, mapName) { data.readyName = playerName; data.readyMap = mapName; }
 
   function renderGameOver(res, score, mapName) {
     data.over = { res: res, score: score, mapName: mapName };
-    data.top = Store.getTop(3);
+    boardStart = performance.now();
+  }
+
+  // 'saving' | 'saved' | 'offline' | 'rejected'
+  function setSaveStatus(s) { data.saveStatus = s; }
+
+  // Cât timp se încarcă, rămân afișate rândurile de dinainte (sau cache-ul)
+  function setTop10Loading() { data.top10.loading = true; }
+
+  // rows: [{ rank, name, score, map }] de la server sau din cache; null = nimic de afișat
+  function setTop10(rows, stale) {
+    data.top10 = {
+      rows: rows ? rows.filter(function (p) { return p && typeof p.name === 'string'; }).map(function (p) {
+        return { rank: Number(p.rank) || 0, name: p.name, score: Number(p.score) || 0, key: Store.keyOf(p.name) };
+      }) : null,
+      stale: !!stale,
+      loading: false
+    };
   }
 
   function renderResults() {
@@ -408,13 +503,17 @@ const UI = (function () {
     });
   }
 
+  // Pe telefon, focus() apelat din atingere (pointerdown) deschide tastatura; altfel jucătorul atinge câmpul
   function show(state) {
     if (state === 'NAME_ENTRY') {
       input.value = '';
       nameError = '';
+      input.style.display = 'block';
+      placeInput();
       input.focus();
     } else {
       input.blur();
+      input.style.display = 'none';
     }
   }
 
@@ -460,6 +559,12 @@ const UI = (function () {
     }
   }
 
+  // Poziția unui eveniment de pointer, în pixeli de artă
+  function toArt(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+  }
+
   function init(h) {
     handlers = h;
     ctx.imageSmoothingEnabled = false;
@@ -470,9 +575,10 @@ const UI = (function () {
     window.addEventListener('resize', resize);
     window.addEventListener('keydown', onKeyDown);
 
-    // Doar caracterele permise intră în câmpul de username
+    // Doar caracterele permise intră în câmpul de username (aceleași ca pe server)
+    const notAllowed = new RegExp('[^' + C.usernameChars + ']', 'g');
     input.addEventListener('input', function () {
-      const v = input.value.replace(/[^\p{L}\p{N} _-]/gu, '');
+      const v = input.value.normalize('NFC').replace(notAllowed, '');
       if (v !== input.value) input.value = v;
       nameError = '';
     });
@@ -481,14 +587,26 @@ const UI = (function () {
       if (handlers.getState() === 'NAME_ENTRY') setTimeout(function () { input.focus(); }, 0);
     });
     document.addEventListener('mousedown', function (e) {
+      if (e.target === input) return; // click / atingere direct pe câmp: lăsăm browserul să-l focuseze (deschide tastatura)
       if (handlers.getState() === 'NAME_ENTRY') { e.preventDefault(); input.focus(); }
     });
 
-    // Mouse: butonul „Rezultate", „Înapoi", roata și bara de derulare
-    const toArt = function (e) {
-      const r = canvas.getBoundingClientRect();
-      return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
-    };
+    // Telefon: o atingere pe canvas = Space (săritură, start, ecranul următor). Click-ul de mouse NU sare.
+    canvas.addEventListener('pointerdown', function (e) {
+      if (e.pointerType !== 'touch') return;
+      const st = handlers.getState();
+      const p = toArt(e);
+      if (st === 'RESULTS') return;                                   // derularea și „Înapoi" merg prin click
+      if (st === 'ATTRACT' && inside(BTN_RESULTS, p)) return;          // butonul „Rezultate" merge prin click
+      e.preventDefault();                                              // fără zoom / selecție
+      if (st === 'NAME_ENTRY') {
+        if (!inside(BTN_START, p)) input.focus();                      // „Start" merge prin click
+        return;
+      }
+      handlers.onSpace();
+    });
+
+    // Mouse: butonul „Rezultate", „Înapoi", „Start", roata și bara de derulare
     const scrollFromY = function (y) {
       if (!resultsLayout || !resultsLayout.maxScroll) return;
       const f = Math.max(0, Math.min(1, (y - resultsLayout.trackY) / resultsLayout.trackH));
@@ -496,7 +614,8 @@ const UI = (function () {
     };
     const overButton = function () {
       const st = handlers.getState();
-      return (st === 'ATTRACT' && inside(BTN_RESULTS, mouse)) || (st === 'RESULTS' && inside(BTN_BACK, mouse));
+      return (st === 'ATTRACT' && inside(BTN_RESULTS, mouse)) || (st === 'RESULTS' && inside(BTN_BACK, mouse)) ||
+             (st === 'NAME_ENTRY' && inside(BTN_START, mouse));
     };
     canvas.addEventListener('mousemove', function (e) {
       const p = toArt(e);
@@ -518,6 +637,7 @@ const UI = (function () {
       const st = handlers.getState();
       if (st === 'ATTRACT' && inside(BTN_RESULTS, p)) handlers.onToggleResults();
       else if (st === 'RESULTS' && inside(BTN_BACK, p)) handlers.onEscape();
+      else if (st === 'NAME_ENTRY' && inside(BTN_START, p)) handlers.onNameSubmit(input.value);
     });
     window.addEventListener('wheel', function (e) {
       if (handlers.getState() !== 'RESULTS') return;
@@ -530,6 +650,7 @@ const UI = (function () {
   return {
     init: init, draw: draw, show: show, setNameError: setNameError,
     renderAttract: renderAttract, renderReady: renderReady,
-    renderGameOver: renderGameOver, renderResults: renderResults
+    renderGameOver: renderGameOver, renderResults: renderResults,
+    setSaveStatus: setSaveStatus, setTop10Loading: setTop10Loading, setTop10: setTop10
   };
 })();

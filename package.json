@@ -1,0 +1,16 @@
+{
+  "name": "flappy-grinties",
+  "private": true,
+  "type": "module",
+  "description": "Flappy Grințieș: jocul static + API (Vercel Functions) cu Top 10 comun în Turso",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "db:migrate": "node scripts/migrate.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.18.0"
+  }
+}

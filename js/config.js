@@ -20,8 +20,10 @@ const CONFIG = {
   // spacing = distanța orizontală dintre centrele obstacolelor (px). speed = viteza de deplasare (px/s).
   gapCenterMargin: 80,     // centrul spațiului nu se generează mai aproape de 80 px de margini
   usernameMaxLength: 12,
+  usernameChars: "A-Za-z0-9ĂÂÎȘȚăâîșțŞŢşţ _-", // caracterele permise în username (clasă regex), identic cu lib/validate.js de pe server
   gameOverToAttractMs: 8000,
   storageKey: "grinties_flappy_v1",
+  api: { base: "/api", timeoutMs: 8000 },     // Top 10 comun: POST /api/score, GET /api/top10 (același domeniu cu jocul)
 
   // --- Adăugate la implementare (nu sunt în specificație) ---
   minGapShift: 80,         // diferența minimă (px) între centrele a două spații consecutive (poziția e aleatorie, dar nu aproape de cea anterioară)
@@ -32,6 +34,7 @@ const CONFIG = {
   firstPillarOffset: 140,  // cât de departe în dreapta ecranului apare primul obstacol
   gameOverInputLockMs: 700,// Space e ignorat atât după game over, ca să nu sară peste ecran un spam de Space
   bannerMs: 1500,          // durata bannerului cu numele hărții
+  top10PageMs: 4000,       // Top 10 se arată pe pagini de câte 5 (1-5, 6-10); cât stă fiecare pagină pe ecran
   music: { src: "music/fundal.mp3", volume: 0.4 }, // melodia de fundal, în buclă; volume între 0 și 1
 
   // Personajul = poza membrului (PNG decupat, fundal transparent, din characters/). Numele NU se afișează jucătorilor;
