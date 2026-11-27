@@ -1,5 +1,11 @@
 # Flappy Grințieș
 
+## Despre proiect
+
+Jocul a fost făcut pentru prezentarea satului (comuna Grințieș, județul Neamț) la [n]GO RURAL – BRIDGING. E evenimentul programului European Youth Village (EYV) pentru grupurile din comunele finaliste la titlul de Sat European de Tineret 2027. Personajele sunt cei 6 membri ai grupului.
+
+## Cum funcționează
+
 Jocul rulează online, pe un link public Vercel, și are un **Top 10 comun** pentru toți jucătorii, păstrat într-o bază Turso (SQLite găzduit).
 
 ```
