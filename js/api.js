@@ -7,7 +7,7 @@ const Api = (function () {
   const TOP_KEY = 'grinties_flappy_top10_cache_v1'; // ultimul Top 10 primit, afișat „neactualizat" dacă serverul nu răspunde
 
   let memQueue = [];                    // rezervă dacă localStorage nu merge
-  const outcome = Object.create(null);  // roundId -> 'saved' | 'rejected' (în sesiunea curentă)
+  const outcome = Object.create(null);  // roundId -> 'saved' | 'notbest' | 'rejected' (în sesiunea curentă)
   let flushing = Promise.resolve(0);
 
   // { ok, error?, status, ...corpul JSON }. status 0 = fără răspuns (rețea, timeout, pagină deschisă din fișier)
@@ -81,7 +81,7 @@ const Api = (function () {
   }
 
   // Trimite turele în ordine. ok (și duplicate) sau 400 = tura iese din coadă; rețea / 5xx / altceva = ne oprim, restul rămâne.
-  // Rezultat: câte ture s-au salvat în această trecere.
+  // Rezultat: câte recorduri s-au salvat în această trecere (doar atunci se schimbă Top 10).
   function runFlush() {
     let saved = 0;
     function next() {
@@ -93,7 +93,9 @@ const Api = (function () {
         return next();
       }
       return submitScore(round).then(function (r) {
-        if (r.ok) { outcome[round.roundId] = 'saved'; saved += 1; }
+        // ok + saved:false = serverul a primit tura, dar nu e record, deci n-a scris nimic
+        if (r.ok && r.saved === false) outcome[round.roundId] = 'notbest';
+        else if (r.ok) { outcome[round.roundId] = 'saved'; saved += 1; }
         else if (r.status === 400) outcome[round.roundId] = 'rejected';
         else return saved;
         removeFromQueue(round.roundId);
@@ -109,7 +111,7 @@ const Api = (function () {
     return flushing;
   }
 
-  // 'saved' | 'rejected' | 'pending' (încă în coadă) | 'unknown'
+  // 'saved' | 'notbest' | 'rejected' | 'pending' (încă în coadă) | 'unknown'
   function roundStatus(roundId) {
     if (outcome[roundId]) return outcome[roundId];
     return readQueue().some(function (r) { return r && r.roundId === roundId; }) ? 'pending' : 'unknown';

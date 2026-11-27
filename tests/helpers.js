@@ -15,7 +15,11 @@ export async function tempDb() {
   return {
     client,
     clear() {
-      return client.execute('DELETE FROM rounds');
+      return client.executeMultiple('DELETE FROM players; DELETE FROM rounds;');
+    },
+    // Reaplică schema (ca `npm run db:migrate` rulat din nou)
+    migrate() {
+      return client.executeMultiple(schema);
     },
     async close() {
       client.close();
@@ -47,7 +51,7 @@ export function mockReq(method, body) {
   return { method, body };
 }
 
-export async function count(client, where = '1', args = []) {
-  const rs = await client.execute({ sql: `SELECT COUNT(*) AS n FROM rounds WHERE ${where}`, args });
+export async function count(client, table = 'players', where = '1', args = []) {
+  const rs = await client.execute({ sql: `SELECT COUNT(*) AS n FROM ${table} WHERE ${where}`, args });
   return Number(rs.rows[0].n);
 }

@@ -1,7 +1,7 @@
-import { test, before, after } from 'node:test';
+import { test, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { tempDb, round, mockReq, mockRes, count } from './helpers.js';
-import { insertRound } from '../lib/rounds.js';
+import { saveBest } from '../lib/players.js';
 import { validateRound } from '../lib/validate.js';
 import { createScoreHandler } from '../api/score.js';
 
@@ -11,34 +11,40 @@ before(async () => {
   db = await tempDb();
   handler = createScoreHandler(() => db.client);
 });
+beforeEach(async () => { await db.clear(); });
 after(async () => { await db.close(); });
 
-test('idempotență: același roundId de două ori = un singur rând', async () => {
-  const r = validateRound(round('Idem', 7)).round;
-  const first = await insertRound(db.client, r);
-  const second = await insertRound(db.client, r);
-  assert.equal(first.rowsAffected, 1);
-  assert.equal(second.rowsAffected, 0);
-  assert.equal(await count(db.client, 'round_id = ?', [r.roundId]), 1);
+async function post(body) {
+  const res = mockRes();
+  await handler(mockReq('POST', body), res);
+  return res;
+}
+
+async function player(key) {
+  const rs = await db.client.execute({ sql: 'SELECT username, best, best_map FROM players WHERE username_key = ?', args: [key] });
+  return rs.rows[0] ? { username: rs.rows[0].username, best: Number(rs.rows[0].best), map: rs.rows[0].best_map } : null;
+}
+
+test('se salvează doar un scor mai mare decât recordul', async () => {
+  assert.deepEqual((await post(round('Ana', 7, 'Poiana'))).body, { ok: true, saved: true });   // jucător nou
+  assert.deepEqual((await post(round('Ana', 5, 'Moci'))).body, { ok: true, saved: false });    // mai mic
+  assert.deepEqual((await post(round('Ana', 7, 'Bradu'))).body, { ok: true, saved: false });   // egal: rămâne primul
+  assert.deepEqual(await player('ana'), { username: 'Ana', best: 7, map: 'Poiana' });
+  assert.deepEqual((await post(round('ANA', 9, 'Moci'))).body, { ok: true, saved: true });     // record nou
+  assert.deepEqual(await player('ana'), { username: 'Ana', best: 9, map: 'Moci' });            // numele rămâne prima formă
+  assert.equal(await count(db.client), 1);
+  assert.equal(await count(db.client, 'rounds'), 0);                                            // turele nu se mai scriu
 });
 
-test('POST /api/score: salvează, apoi răspunde duplicate la retrimitere', async () => {
-  const body = round('Test', 5, 'Grințieșu Mic');
-  let res = mockRes();
-  await handler(mockReq('POST', body), res);
-  assert.equal(res.statusCode, 200);
-  assert.deepEqual(res.body, { ok: true });
-  res = mockRes();
-  await handler(mockReq('POST', body), res);
-  assert.equal(res.statusCode, 200);
-  assert.deepEqual(res.body, { ok: true, duplicate: true });
-  assert.equal(await count(db.client, 'round_id = ?', [body.roundId]), 1);
+test('idempotență: aceeași tură trimisă de două ori nu schimbă nimic a doua oară', async () => {
+  const r = validateRound(round('Idem', 7)).round;
+  assert.equal((await saveBest(db.client, r)).rowsAffected, 1);
+  assert.equal((await saveBest(db.client, r)).rowsAffected, 0);
+  assert.equal(await count(db.client), 1);
 });
 
 test('POST /api/score: corpul ca text (fără Content-Type JSON) e acceptat', async () => {
-  const res = mockRes();
-  await handler(mockReq('POST', JSON.stringify(round('Text', 3))), res);
-  assert.deepEqual(res.body, { ok: true });
+  assert.deepEqual((await post(JSON.stringify(round('Text', 3)))).body, { ok: true, saved: true });
 });
 
 test('POST /api/score: date invalide → 400 și niciun rând nou', async () => {

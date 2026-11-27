@@ -39,6 +39,17 @@ const Music = (function () {
   window.addEventListener('keydown', onFirstGesture);
   window.addEventListener('pointerdown', onFirstGesture);
 
+  // Tab ascuns (alt tab, altă aplicație, ecran blocat pe telefon): muzica se oprește și pornește din nou la întoarcere
+  let pausedByHide = false;
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      if (!audio.paused) { audio.pause(); pausedByHide = true; }
+    } else if (pausedByHide) {
+      pausedByHide = false;
+      tryPlay();
+    }
+  });
+
   // Ctrl+Shift+M: oprește / pornește sunetul (scurtătură de organizator; nu se salvează)
   window.addEventListener('keydown', function (e) {
     if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === 'KeyM') {

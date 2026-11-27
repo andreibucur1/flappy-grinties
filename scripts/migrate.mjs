@@ -19,8 +19,8 @@ const schema = await readFile(new URL('../db/schema.sql', import.meta.url), 'utf
 const client = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
 try {
   await client.executeMultiple(schema);
-  const rs = await client.execute('SELECT COUNT(*) AS n FROM rounds');
-  console.log(`Schema aplicată. Tabelul rounds are ${rs.rows[0].n} rânduri.`);
+  const rs = await client.execute('SELECT (SELECT COUNT(*) FROM players) AS p, (SELECT COUNT(*) FROM rounds) AS r');
+  console.log(`Schema aplicată. players: ${rs.rows[0].p} jucători; rounds (arhivă): ${rs.rows[0].r} ture.`);
 } finally {
   client.close();
 }
